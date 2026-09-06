@@ -105,5 +105,7 @@ public class SmartHome {
                 .orElse(null);
 
     }
-
+    public List<Room> getAllRooms() {
+        return rooms;
+    }
 }
