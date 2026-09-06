@@ -4,7 +4,7 @@ import com.smartphone.model.Enum.DeviceStatus;
 
 public class Device {
 
-    private Long id ;
+    private String id ;
     private String name;
     private DeviceStatus status;
     private Room room;

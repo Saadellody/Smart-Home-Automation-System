@@ -6,16 +6,53 @@ import java.util.List;
 
 public class Room {
 
-    private Long id;
+    private String id;
     private String name;
     private RoomType type;
     private List<Device> devices;
     private SmartHome smartHome;
 
+    public String getId() {
+        return id;
+    }
 
+    public void setId(String id) {
+        this.id = id;
+    }
 
+    public String getName() {
+        return name;
+    }
 
-//    Room management
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public RoomType getType() {
+        return type;
+    }
+
+    public void setType(RoomType type) {
+        this.type = type;
+    }
+
+    public List<Device> getDevices() {
+        return devices;
+    }
+
+    public void setDevices(List<Device> devices) {
+        this.devices = devices;
+    }
+
+    public SmartHome getSmartHome() {
+        return smartHome;
+    }
+
+    public void setSmartHome(SmartHome smartHome) {
+        this.smartHome = smartHome;
+    }
+
+    //    Room management
 //    Add device
 //    addDevice(Device device)
 //
