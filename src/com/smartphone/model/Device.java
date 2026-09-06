@@ -9,7 +9,44 @@ public class Device {
     private DeviceStatus status;
     private Room room;
 
+    public Device(String id, String name, DeviceStatus status, Room room) {
+        this.id = id;
+        this.name = name;
+        this.status = status;
+        this.room = room;
+    }
 
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public DeviceStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(DeviceStatus status) {
+        this.status = status;
+    }
+
+    public Room getRoom() {
+        return room;
+    }
+
+    public void setRoom(Room room) {
+        this.room = room;
+    }
 //    4. Device methods
 //
 //    Our current attributes:

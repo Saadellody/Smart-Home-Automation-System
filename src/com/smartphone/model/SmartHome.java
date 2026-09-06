@@ -14,6 +14,16 @@ public class SmartHome {
     private AutomationScenario automationScenario;
     private HomeConfiguration homeConfiguration;
 
+    public SmartHome(Long id, String type, String name, List<Room> rooms, List<Device> devices, AutomationScenario automationScenario, HomeConfiguration homeConfiguration) {
+        this.id = id;
+        this.type = type;
+        this.name = name;
+        this.rooms = rooms;
+        this.devices = devices;
+        this.automationScenario = automationScenario;
+        this.homeConfiguration = homeConfiguration;
+    }
+
     public Long getId() {
         return id;
     }
@@ -108,4 +118,7 @@ public class SmartHome {
     public List<Room> getAllRooms() {
         return rooms;
     }
+
+
+
 }

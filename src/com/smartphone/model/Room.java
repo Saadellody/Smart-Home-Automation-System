@@ -12,6 +12,14 @@ public class Room {
     private List<Device> devices;
     private SmartHome smartHome;
 
+    public Room(String id, String name, RoomType type, List<Device> devices, SmartHome smartHome) {
+        this.id = id;
+        this.name = name;
+        this.type = type;
+        this.devices = devices;
+        this.smartHome = smartHome;
+    }
+
     public String getId() {
         return id;
     }
