@@ -83,7 +83,12 @@ The system follows a layered architecture.
 
 # 3. Package Structure
 
-The initial Java project should be organized as follows:
+The initial Java project should be organized as follows.
+
+> **Implementation note:** the implemented code follows this layout. It also adds `model/enums`, the
+> `Action`/`Trigger`/`ExecutionReport` model classes, an `abstractfactory/generic` family, `service/AutomationScheduler`,
+> the REST layer in `api/` (JDK `HttpServer`, no framework) and `cli/` (console demo + seed data).
+> Tests live in `test/`. See `README.md` for how to run it and for the API reference.
 
 ```text
 src/
