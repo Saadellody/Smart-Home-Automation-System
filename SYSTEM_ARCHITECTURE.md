@@ -86,8 +86,10 @@ The system follows a layered architecture.
 The initial Java project should be organized as follows.
 
 > **Implementation note:** the implemented code follows this layout. It also adds `model/enums`, the
-> `Action`/`Trigger`/`ExecutionReport` model classes, an `abstractfactory/generic` family, `service/AutomationScheduler`,
-> the REST layer in `api/` (JDK `HttpServer`, no framework) and `cli/` (console demo + seed data).
+> `Action`/`Trigger`/`ExecutionReport`/`Notification` model classes, an `abstractfactory/generic` family,
+> `service/AutomationScheduler`, `service/NotificationService`, the REST layer in `api/` (JDK `HttpServer`, no framework)
+> and `cli/` (interactive `CommandLineInterface`, console demo, seed data). `prototype/AutomationPrototype` is a
+> registry of template scenarios. Camera, TV and DoorLock extend `Device` directly rather than `Light`, as section 5 allows.
 > Tests live in `test/`. See `README.md` for how to run it and for the API reference.
 
 ```text

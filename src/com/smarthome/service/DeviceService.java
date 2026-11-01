@@ -1,6 +1,9 @@
 package com.smarthome.service;
 
 import com.smarthome.exception.DeviceNotFoundException;
+import com.smarthome.exception.SecurityModeException;
+import com.smarthome.model.HomeConfiguration;
+import com.smarthome.model.enums.NotificationType;
 import com.smarthome.factory.DeviceCreator;
 import com.smarthome.model.Action;
 import com.smarthome.model.Camera;
@@ -22,10 +25,12 @@ public class DeviceService {
 
     private final SmartHomeManager manager;
     private final RoomService roomService;
+    private final NotificationService notifications;
 
-    public DeviceService(SmartHomeManager manager, RoomService roomService) {
+    public DeviceService(SmartHomeManager manager, RoomService roomService, NotificationService notifications) {
         this.manager = manager;
         this.roomService = roomService;
+        this.notifications = notifications;
     }
 
     /**
@@ -78,29 +83,34 @@ public class DeviceService {
     }
 
     public Device turnOn(String deviceId) {
-        Device device = getDevice(deviceId);
-        device.turnOn();
-        return device;
+        return executeCommand(deviceId, ActionType.TURN_ON, null);
     }
 
     public Device turnOff(String deviceId) {
-        Device device = getDevice(deviceId);
-        device.turnOff();
-        return device;
+        return executeCommand(deviceId, ActionType.TURN_OFF, null);
     }
 
-    /** Runs any device-specific command, e.g. SET_BRIGHTNESS 40 on a light or LOCK on a door lock. */
+    /**
+     * Runs any device-specific command, e.g. SET_BRIGHTNESS 40 on a light or LOCK on a door lock.
+     * Temperatures are in Celsius; callers convert from the configured unit first.
+     */
     public Device executeCommand(String deviceId, ActionType type, Double value) {
         Device device = getDevice(deviceId);
-        Action.forDevice(deviceId, type, value).applyTo(device);
+        try {
+            Action.forDevice(deviceId, type, value).applyTo(device);
+        } catch (SecurityModeException e) {
+            notifications.notify(NotificationType.SECURITY, "Blocked " + type + " on '" + device.getName() + "'");
+            throw e;
+        }
         return device;
     }
 
     /** Short text describing a device's current state, e.g. "ON, brightness 40%". */
-    public static String describeState(Device device) {
+    public static String describeState(Device device, HomeConfiguration config) {
         String details = switch (device) {
             case Light l -> "brightness " + l.getBrightness() + "%";
-            case Thermostat t -> "target " + t.getTargetTemperature() + " C";
+            case Thermostat t -> "target " + config.fromCelsius(t.getTargetTemperature())
+                    + " " + config.getTemperatureUnit().getSymbol();
             case Camera c -> c.isRecording() ? "recording" : "not recording";
             case Fan f -> "speed " + f.getSpeed();
             case TV tv -> "channel " + tv.getChannel() + ", volume " + tv.getVolume();

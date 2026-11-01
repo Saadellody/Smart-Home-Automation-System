@@ -11,10 +11,16 @@ See [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) for the design.
 ```bash
 javac -d out $(find src -name "*.java")
 java -cp out com.smarthome.Main            # REST API on http://localhost:8080/api, with demo data
+java -cp out com.smarthome.Main cli        # interactive command line (type "help")
 java -cp out com.smarthome.Main demo       # console walkthrough of the full workflow
 ```
 
-Server options: `--port 9000` (or env `PORT`), `--host 0.0.0.0` (or env `HOST`), `--empty` (start without demo data).
+Options:
+
+- `--empty`: start without demo data. Works for the API and the CLI.
+- `--port 9000` (or env `PORT`) and `--host 0.0.0.0` (or env `HOST`): API only.
+
+The CLI does not run the scheduler, so `TIME` triggers only fire in API mode. In the CLI, run scenarios with `run <id>` or fire events with `event <name>`.
 
 On Windows PowerShell, compile with:
 
@@ -40,7 +46,7 @@ javac -d out $(find src test -name "*.java") && java -cp out com.smarthome.Smart
 | Factory Method   | `factory/DeviceCreator` + `LightCreator`, `TVCreator`...  | Clients ask for a `DeviceType`, never `new Light(...)` |
 | Abstract Factory | `abstractfactory/SmartHomeFactory` + Google/Apple/Amazon/Generic | A home's lights, thermostats and cameras all come from the chosen ecosystem |
 | Builder          | `builder/AutomationScenarioBuilder`                       | Scenarios have many optional parts (trigger, description, N actions) |
-| Prototype        | `prototype/Prototype`, `AutomationScenario.copy()`        | "Movie Mode Winter" is cloned from "Movie Mode", and the two stay independent |
+| Prototype        | `prototype/Prototype`, `AutomationScenario.copy()`, `prototype/AutomationPrototype` (template registry) | "Movie Mode Winter" is cloned from "Movie Mode", new homes start from ready-made templates, and every copy stays independent |
 
 ## Concepts
 
@@ -48,7 +54,12 @@ javac -d out $(find src test -name "*.java") && java -cp out com.smarthome.Smart
 - **Action:** `{ "type": ActionType, "deviceId" | "deviceType", "roomId"?, "value"? }`. An action targets one device, or every device of a type (optionally limited to one room).
 - **Action types:** `TURN_ON`, `TURN_OFF` (any device), `SET_BRIGHTNESS`, `SET_TEMPERATURE`, `START_RECORDING`, `STOP_RECORDING`, `SET_SPEED`, `SET_CHANNEL`, `SET_VOLUME`, `LOCK`, `UNLOCK`. `GET /api/meta` lists them with the device type each one applies to.
 - **Trigger:** `MANUAL` (run through the API), `TIME` (`"value": "HH:mm"`, run by the scheduler) or `EVENT` (`"value": "<event name>"`, run by `POST /api/events`). `TIME` and `EVENT` triggers fire only while `autoModeEnabled` is `true`.
-- **Execution report:** each action/device pair is `APPLIED`, `SKIPPED` (no matching device) or `FAILED` (invalid value). One failure does not stop the other actions.
+- **Execution report:** each action/device pair is `APPLIED`, `SKIPPED` (no matching device) or `FAILED` (invalid value, or blocked by security). One failure does not stop the other actions.
+- **Temperature unit:** all temperatures are stored in Celsius. When `temperatureUnit` is `FAHRENHEIT`, every temperature the API or CLI accepts or returns is in Fahrenheit. This covers thermostat `targetTemperature`, `defaultTemperature`, and `SET_TEMPERATURE` values in commands and scenarios. The API also accepts `C` and `F`.
+- **Security mode:** arming locks every door and starts every camera recording. While armed, the system refuses anything that would weaken protection (`UNLOCK`, `STOP_RECORDING`, turning a lock or camera off) with a `422` error, until you disarm. You can arm with `POST /api/home/security/arm`, with `"securityEnabled": true` in the configuration, or from a scenario.
+- **Scenario security mode:** set `"securityMode"` to `NONE`, `ARM` or `DISARM`. `DISARM` runs *before* the actions, so Good Morning can disarm and then unlock the doors. `ARM` runs *after* the actions.
+- **Notifications:** while `notificationsEnabled` is on, the system records a notification each time a scenario runs, security is armed or disarmed, or an action is blocked. A scenario can set its own text (`notificationMessage`) or stay silent (`"notifyOnExecution": false`). Read them with `GET /api/notifications`, newest first; the last 200 are kept.
+- **Templates:** five built-in templates (`good-night`, `good-morning`, `movie-mode`, `away`, `welcome-home`) target devices by type, so they work in any home. You can also save your own scenarios as templates.
 
 Enum values are case-insensitive, and dashes are accepted (`"door-lock"`).
 
@@ -65,7 +76,9 @@ Base URL: `http://localhost:8080/api`. `GET /api` lists every endpoint.
 | POST | `/api/home` | `{"name","ecosystem"?}`: creates a new empty home that **replaces** the current one |
 | PUT  | `/api/home` | `{"name"?,"ecosystem"?}`: a new ecosystem applies to devices created afterwards |
 | GET  | `/api/home/state` | text snapshot |
-| GET / PUT | `/api/home/configuration` | `{"temperatureUnit"?,"defaultTemperature"?,"securityEnabled"?,"notificationsEnabled"?,"autoModeEnabled"?}` |
+| GET / PUT | `/api/home/configuration` | `{"temperatureUnit"?,"defaultTemperature"?,"securityEnabled"?,"notificationsEnabled"?,"autoModeEnabled"?}`. `defaultTemperature` is read in the unit sent in the same request |
+| POST | `/api/home/security/arm` · `/disarm` | |
+| GET / DELETE | `/api/notifications` | list (newest first) / clear |
 
 ### Rooms
 | Method | Path | Body |
@@ -89,12 +102,19 @@ Base URL: `http://localhost:8080/api`. `GET /api` lists every endpoint.
 | Method | Path | Body |
 | ------ | ---- | ---- |
 | GET    | `/api/scenarios` | |
-| POST   | `/api/scenarios` | `{"name","description"?,"enabled"?,"trigger"?,"actions":[...]}` |
+| POST   | `/api/scenarios` | `{"name","description"?,"enabled"?,"trigger"?,"actions":[...],"securityMode"?,"notifyOnExecution"?,"notificationMessage"?}` |
 | GET / PUT / DELETE | `/api/scenarios/{id}` | PUT: any of the POST fields (`actions` replaces the whole list) |
 | POST   | `/api/scenarios/{id}/execute` | returns the execution report |
 | POST   | `/api/scenarios/{id}/clone` | `{"name"?}` |
 | POST   | `/api/scenarios/{id}/enable` · `/disable` | |
+| POST   | `/api/scenarios/{id}/save-as-template` | `{"key":"my-night"}` |
 | POST   | `/api/events` | `{"name":"arrived-home"}`: runs the matching EVENT scenarios (auto mode only) |
+
+### Templates
+| Method | Path | Body |
+| ------ | ---- | ---- |
+| GET    | `/api/templates` | |
+| POST   | `/api/templates/{key}/create` | `{"name"?}`: adds a new scenario to the home, cloned from the template |
 
 ### Errors
 
@@ -107,7 +127,7 @@ The API uses these status codes:
 - `400`: invalid JSON, a missing field or a bad value.
 - `404`: unknown resource or endpoint.
 - `405`: the method is not allowed on that path.
-- `422`: a valid request that breaks a rule. Examples are running a disabled scenario or sending `LOCK` to a light.
+- `422`: a valid request that breaks a rule. Examples are running a disabled scenario, sending `LOCK` to a light, or unlocking a door while security is armed.
 
 ### Example
 
@@ -126,5 +146,20 @@ curl -X POST localhost:8080/api/scenarios -H "Content-Type: application/json" -d
 
 curl -X POST localhost:8080/api/scenarios/scn-1/execute
 ```
+
+## CLI
+
+```text
+> rooms
+> device add room-1 LIGHT Desk Lamp
+> cmd dev-1 SET_BRIGHTNESS 40
+> set unit F
+> scenario new          (guided: name, trigger, security, notification, then one action per line)
+> template away Leaving
+> arm
+> notifications
+```
+
+Type `help` for the full list of commands.
 
 State is kept in memory. Restarting the server resets it to the demo data.
