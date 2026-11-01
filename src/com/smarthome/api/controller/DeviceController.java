@@ -50,8 +50,9 @@ public class DeviceController {
         router.post("/api/devices/{id}/off", req -> Response.ok(JsonMapper.device(deviceService.turnOff(req.pathParam("id")))));
         router.post("/api/devices/{id}/commands", req -> {
             JsonBody body = req.body();
+            ActionType type = body.requiredEnum("type", ActionType.class);
             return Response.ok(JsonMapper.device(deviceService.executeCommand(req.pathParam("id"),
-                    body.requiredEnum("type", ActionType.class), body.optDouble("value"))));
+                    type, JsonMapper.toDomainValue(type, body.optDouble("value")))));
         });
     }
 }

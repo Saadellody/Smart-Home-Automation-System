@@ -2,39 +2,35 @@ package com.smarthome.cli;
 
 import com.smarthome.model.AutomationScenario;
 import com.smarthome.model.ExecutionReport;
+import com.smarthome.model.enums.ActionType;
 import com.smarthome.service.AutomationService;
-import com.smarthome.service.DeviceService;
-import com.smarthome.service.RoomService;
-import com.smarthome.service.SmartHomeService;
+import com.smarthome.service.Services;
 import com.smarthome.singleton.SmartHomeManager;
 
 /** Walks through the complete workflow of SYSTEM_ARCHITECTURE.md section 13 in the console. */
 public class ConsoleDemo {
 
-    private final SmartHomeService homes;
-    private final RoomService rooms;
-    private final DeviceService devices;
-    private final AutomationService automations;
+    private final Services services;
+    private int stepNumber;
 
-    public ConsoleDemo(SmartHomeService homes, RoomService rooms, DeviceService devices, AutomationService automations) {
-        this.homes = homes;
-        this.rooms = rooms;
-        this.devices = devices;
-        this.automations = automations;
+    public ConsoleDemo(Services services) {
+        this.services = services;
     }
 
     public void run() {
+        AutomationService automations = services.automations();
         step("Singleton: one SmartHomeManager",
                 "same instance twice -> " + (SmartHomeManager.getInstance() == SmartHomeManager.getInstance()));
 
-        DemoData.seed(homes, rooms, devices, automations);
-        step("Home, rooms and devices created (Google ecosystem via Abstract Factory)", homes.describeState());
+        DemoData.seed(services);
+        step("Home, rooms and devices created (Google ecosystem via Abstract Factory)", services.homes().describeState());
 
         StringBuilder list = new StringBuilder();
         for (AutomationScenario s : automations.listScenarios()) {
             list.append(s.getId()).append("  ").append(s.getName())
                     .append("  trigger=").append(s.getTrigger().type())
                     .append(s.getTrigger().value() == null ? "" : " " + s.getTrigger().value())
+                    .append("  security=").append(s.getSecurityAction())
                     .append("  actions=").append(s.getActions().size()).append('\n');
         }
         step("Scenarios built with the Builder (Movie Mode Winter cloned with Prototype)", list.toString().trim());
@@ -42,18 +38,28 @@ public class ConsoleDemo {
         for (String name : new String[]{"Movie Mode", "Good Night"}) {
             AutomationScenario scenario = automations.listScenarios().stream()
                     .filter(s -> s.getName().equals(name)).findFirst().orElseThrow();
-            ExecutionReport report = automations.execute(scenario.getId());
-            StringBuilder out = new StringBuilder();
-            report.getEntries().forEach(e -> out.append(e.outcome()).append("  ").append(e.action())
-                    .append(e.deviceName() == null ? "" : "  (" + e.deviceName() + ")")
-                    .append(e.message() == null ? "" : "  " + e.message()).append('\n'));
-            step("Execute '" + name + "'", out.toString().trim());
+            step("Execute '" + name + "'", CommandLineInterface.formatReport(automations.execute(scenario.getId())));
         }
 
-        step("Final state", homes.describeState());
-    }
+        try {
+            services.devices().executeCommand(
+                    services.homes().getHome().getDevices().stream()
+                            .filter(d -> d.getName().equals("Front Door Lock")).findFirst().orElseThrow().getId(),
+                    ActionType.UNLOCK, null);
+        } catch (RuntimeException e) {
+            step("Security mode refuses to unlock the front door", e.getMessage());
+        }
 
-    private int stepNumber;
+        ExecutionReport morning = automations.execute(automations.listScenarios().stream()
+                .filter(s -> s.getName().equals("Good Morning")).findFirst().orElseThrow().getId());
+        step("Execute 'Good Morning'", CommandLineInterface.formatReport(morning));
+
+        step("Final state", services.homes().describeState());
+
+        StringBuilder notes = new StringBuilder();
+        services.notifications().list().forEach(n -> notes.append(n.type()).append("  ").append(n.message()).append('\n'));
+        step("Notifications (newest first)", notes.toString().trim());
+    }
 
     private void step(String title, String body) {
         System.out.println();

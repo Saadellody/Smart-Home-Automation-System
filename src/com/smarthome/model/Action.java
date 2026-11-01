@@ -1,6 +1,7 @@
 package com.smarthome.model;
 
 import com.smarthome.exception.InvalidDeviceOperationException;
+import com.smarthome.exception.SecurityModeException;
 import com.smarthome.model.enums.ActionType;
 import com.smarthome.model.enums.DeviceType;
 
@@ -66,6 +67,7 @@ public record Action(ActionType type, String deviceId, DeviceType deviceType, St
             throw new InvalidDeviceOperationException(
                     "Action " + type + " is not supported by " + device.getType() + " " + device.getId());
         }
+        checkSecurityMode(device);
         switch (type) {
             case TURN_ON -> device.turnOn();
             case TURN_OFF -> device.turnOff();
@@ -81,6 +83,23 @@ public record Action(ActionType type, String deviceId, DeviceType deviceType, St
         }
     }
 
+    /** While security mode is armed, doors stay locked and cameras keep recording. */
+    private void checkSecurityMode(Device device) {
+        SmartHome home = device.getRoom() == null ? null : device.getRoom().getHome();
+        if (home == null || !home.isSecurityArmed()) {
+            return;
+        }
+        boolean weakens = switch (type) {
+            case UNLOCK, STOP_RECORDING -> true;
+            case TURN_OFF -> device instanceof DoorLock || device instanceof Camera;
+            default -> false;
+        };
+        if (weakens) {
+            throw new SecurityModeException("Security mode is armed: " + type + " on '" + device.getName()
+                    + "' is not allowed. Disarm security first");
+        }
+    }
+
     private int intValue() {
         if (value != Math.rint(value)) {
             throw new InvalidDeviceOperationException("Action " + type + " requires a whole number");
@@ -90,6 +109,7 @@ public record Action(ActionType type, String deviceId, DeviceType deviceType, St
 
     public String describe() {
         String target = deviceId != null ? deviceId : "all " + deviceType + (roomId != null ? " in " + roomId : "");
-        return target + " -> " + type + (value != null ? " " + value : "");
+        String unit = type == ActionType.SET_TEMPERATURE ? " C" : "";
+        return target + " -> " + type + (value != null ? " " + value + unit : "");
     }
 }

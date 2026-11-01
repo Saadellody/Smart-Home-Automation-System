@@ -2,8 +2,10 @@ package com.smarthome.model;
 
 import com.smarthome.model.enums.Ecosystem;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,6 +19,9 @@ public class SmartHome {
     private final List<AutomationScenario> scenarios = new ArrayList<>();
     private String activeScenarioId;
     private final HomeConfiguration configuration = new HomeConfiguration();
+
+    private static final int MAX_NOTIFICATIONS = 200;
+    private final Deque<Notification> notifications = new ArrayDeque<>();
 
     public SmartHome(String id, String name, Ecosystem ecosystem) {
         this.id = id;
@@ -111,6 +116,51 @@ public class SmartHome {
 
     public void setActiveScenarioId(String activeScenarioId) {
         this.activeScenarioId = activeScenarioId;
+    }
+
+    // ---- security mode ----
+
+    /**
+     * Arms security mode: every door is locked and every camera records. While armed, actions that
+     * would weaken protection (unlocking, stopping a camera, powering off a lock or camera) are refused.
+     */
+    public void armSecurity() {
+        configuration.setSecurityEnabled(true);
+        for (Device device : getDevices()) {
+            if (device instanceof DoorLock lock) {
+                lock.turnOn();
+                lock.lock();
+            } else if (device instanceof Camera camera) {
+                camera.startRecording();
+            }
+        }
+    }
+
+    /** Disarms security mode. Devices keep their state; they can now be unlocked or stopped. */
+    public void disarmSecurity() {
+        configuration.setSecurityEnabled(false);
+    }
+
+    public boolean isSecurityArmed() {
+        return configuration.isSecurityEnabled();
+    }
+
+    // ---- notifications ----
+
+    public void addNotification(Notification notification) {
+        notifications.addFirst(notification);
+        while (notifications.size() > MAX_NOTIFICATIONS) {
+            notifications.removeLast();
+        }
+    }
+
+    /** Newest first. */
+    public List<Notification> getNotifications() {
+        return List.copyOf(notifications);
+    }
+
+    public void clearNotifications() {
+        notifications.clear();
     }
 
     // ---- attributes ----

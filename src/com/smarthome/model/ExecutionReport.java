@@ -33,6 +33,16 @@ public class ExecutionReport {
         entries.add(new Entry(action.describe(), device.getId(), device.getName(), Outcome.FAILED, reason));
     }
 
+    void security(String state) {
+        entries.add(new Entry("security -> " + state, null, null, Outcome.APPLIED, null));
+    }
+
+    /** "3 applied, 1 skipped, 0 failed" */
+    public String summary() {
+        return count(Outcome.APPLIED) + " applied, " + count(Outcome.SKIPPED) + " skipped, "
+                + count(Outcome.FAILED) + " failed";
+    }
+
     public String getScenarioId() {
         return scenarioId;
     }

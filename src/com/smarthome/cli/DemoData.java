@@ -1,6 +1,7 @@
 package com.smarthome.cli;
 
 import com.smarthome.builder.AutomationScenarioBuilder;
+import com.smarthome.model.Action;
 import com.smarthome.model.AutomationScenario;
 import com.smarthome.model.Device;
 import com.smarthome.model.Room;
@@ -8,11 +9,9 @@ import com.smarthome.model.enums.ActionType;
 import com.smarthome.model.enums.DeviceType;
 import com.smarthome.model.enums.Ecosystem;
 import com.smarthome.model.enums.RoomType;
-import com.smarthome.model.Action;
-import com.smarthome.service.AutomationService;
 import com.smarthome.service.DeviceService;
 import com.smarthome.service.RoomService;
-import com.smarthome.service.SmartHomeService;
+import com.smarthome.service.Services;
 
 /** Fills the home with the rooms, devices and scenarios described in SYSTEM_ARCHITECTURE.md. */
 public final class DemoData {
@@ -20,9 +19,10 @@ public final class DemoData {
     private DemoData() {
     }
 
-    public static void seed(SmartHomeService homes, RoomService rooms, DeviceService devices,
-                            AutomationService automations) {
-        homes.createHome("Demo Home", Ecosystem.GOOGLE);
+    public static void seed(Services services) {
+        RoomService rooms = services.rooms();
+        DeviceService devices = services.devices();
+        services.homes().createHome("Demo Home", Ecosystem.GOOGLE);
 
         Room living = rooms.createRoom("Living Room", RoomType.LIVING_ROOM);
         Room bedroom = rooms.createRoom("Bedroom", RoomType.BEDROOM);
@@ -38,18 +38,20 @@ public final class DemoData {
         devices.addDevice(garage.getId(), DeviceType.CAMERA, "Garage Camera");
         devices.addDevice(garage.getId(), DeviceType.DOOR_LOCK, "Front Door Lock");
 
+        var automations = services.automations();
         automations.createScenario(AutomationScenarioBuilder.scenario("Good Night")
-                .description("Everything off, doors locked, cameras recording")
+                .description("Everything off, 19 C, security armed")
                 .at("22:30")
-                .turnOffAll(DeviceType.LIGHT)
+                .lighting(0)
                 .turnOffAll(DeviceType.TV)
-                .lockAllDoors()
-                .startRecordingAllCameras()
-                .temperature(19));
+                .temperature(19)
+                .armSecurity()
+                .notifyWith("Good night! Doors are locked and cameras are recording."));
 
         automations.createScenario(AutomationScenarioBuilder.scenario("Good Morning")
-                .description("Wake-up lights and a warmer house")
+                .description("Security disarmed, wake-up lights, a warmer house")
                 .at("07:00")
+                .disarmSecurity()
                 .turnOn(bedroomLight.getId())
                 .turnOn(kitchenLight.getId())
                 .temperature(21));

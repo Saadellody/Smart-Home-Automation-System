@@ -9,13 +9,17 @@ import com.smarthome.model.Device;
 import com.smarthome.model.ExecutionReport;
 import com.smarthome.model.SmartHome;
 import com.smarthome.model.Trigger;
+import com.smarthome.model.enums.NotificationType;
+import com.smarthome.model.enums.SecurityAction;
 import com.smarthome.model.enums.TriggerType;
+import com.smarthome.prototype.AutomationPrototype;
 import com.smarthome.singleton.SmartHomeManager;
 import com.smarthome.util.IdGenerator;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public class AutomationService {
@@ -23,13 +27,24 @@ public class AutomationService {
     private static final DateTimeFormatter HH_MM = DateTimeFormatter.ofPattern("HH:mm");
 
     private final SmartHomeManager manager;
+    private final NotificationService notifications;
+    private final AutomationPrototype templates;
 
-    public AutomationService(SmartHomeManager manager) {
+    public AutomationService(SmartHomeManager manager, NotificationService notifications) {
+        this(manager, notifications, AutomationPrototype.withDefaults());
+    }
+
+    public AutomationService(SmartHomeManager manager, NotificationService notifications, AutomationPrototype templates) {
         this.manager = manager;
+        this.notifications = notifications;
+        this.templates = templates;
     }
 
     public AutomationScenario createScenario(AutomationScenarioBuilder builder) {
-        AutomationScenario scenario = builder.build();
+        return save(builder.build());
+    }
+
+    private AutomationScenario save(AutomationScenario scenario) {
         validate(scenario);
         manager.getHome().addScenario(scenario);
         return scenario;
@@ -71,31 +86,44 @@ public class AutomationService {
         return manager.getHome().getScenarios();
     }
 
-    /** Updates a scenario; null arguments leave the current value unchanged. */
-    public AutomationScenario updateScenario(String scenarioId, String name, String description,
-                                             Trigger trigger, List<Action> actions, Boolean enabled) {
+    /** Partial update of a scenario. Every field left null keeps its current value. */
+    public record ScenarioChanges(String name, String description, Trigger trigger, List<Action> actions,
+                                  Boolean enabled, SecurityAction securityAction, Boolean notifyOnExecution,
+                                  String notificationMessage) {
+    }
+
+    public AutomationScenario updateScenario(String scenarioId, ScenarioChanges changes) {
         AutomationScenario scenario = getScenario(scenarioId);
-        if (actions != null) {
-            validateActions(actions);
+        if (changes.actions() != null) {
+            validateActions(changes.actions());
         }
-        if (name != null) {
-            scenario.setName(name);
+        if (changes.name() != null) {
+            scenario.setName(changes.name());
         }
-        if (description != null) {
-            scenario.setDescription(description);
+        if (changes.description() != null) {
+            scenario.setDescription(changes.description());
         }
-        if (trigger != null) {
-            scenario.setTrigger(trigger);
+        if (changes.trigger() != null) {
+            scenario.setTrigger(changes.trigger());
         }
-        if (actions != null) {
-            scenario.replaceActions(actions);
+        if (changes.actions() != null) {
+            scenario.replaceActions(changes.actions());
         }
-        if (enabled != null) {
-            if (enabled) {
+        if (changes.enabled() != null) {
+            if (changes.enabled()) {
                 scenario.enable();
             } else {
                 scenario.disable();
             }
+        }
+        if (changes.securityAction() != null) {
+            scenario.setSecurityAction(changes.securityAction());
+        }
+        if (changes.notifyOnExecution() != null) {
+            scenario.setNotifyOnExecution(changes.notifyOnExecution());
+        }
+        if (changes.notificationMessage() != null) {
+            scenario.setNotificationMessage(changes.notificationMessage());
         }
         return scenario;
     }
@@ -106,7 +134,18 @@ public class AutomationService {
     }
 
     public ExecutionReport execute(String scenarioId) {
-        return getScenario(scenarioId).execute(manager.getHome());
+        return run(getScenario(scenarioId), "manually");
+    }
+
+    private ExecutionReport run(AutomationScenario scenario, String cause) {
+        ExecutionReport report = scenario.execute(manager.getHome());
+        if (scenario.isNotifyOnExecution()) {
+            String message = scenario.getNotificationMessage() != null
+                    ? scenario.getNotificationMessage()
+                    : "Scenario '" + scenario.getName() + "' ran " + cause + ": " + report.summary();
+            notifications.notify(NotificationType.SCENARIO, message);
+        }
+        return report;
     }
 
     /** Prototype: creates an independent copy of an existing scenario under a new id and name. */
@@ -131,6 +170,30 @@ public class AutomationService {
         return scenario;
     }
 
+    // ---- templates (Prototype registry) ----
+
+    public Map<String, AutomationScenario> listTemplates() {
+        return templates.getPrototypes();
+    }
+
+    /** Adds a new scenario to the home, cloned from a template. */
+    public AutomationScenario createFromTemplate(String key, String name) {
+        AutomationScenario scenario = templates.create(key);
+        scenario.setId(IdGenerator.next("scn"));
+        if (name != null && !name.isBlank()) {
+            scenario.setName(name);
+        }
+        return save(scenario);
+    }
+
+    /** Stores a copy of one of the home's scenarios as a reusable template. */
+    public AutomationScenario saveAsTemplate(String scenarioId, String key) {
+        templates.register(key, getScenario(scenarioId));
+        return getScenario(scenarioId);
+    }
+
+    // ---- automatic triggers ----
+
     /**
      * Fires a named event: runs every enabled EVENT scenario listening to it.
      * Automatic triggers only run while auto mode is enabled in the home configuration.
@@ -152,10 +215,12 @@ public class AutomationService {
         if (!home.getConfiguration().isAutoModeEnabled()) {
             return List.of();
         }
+        String cause = type == TriggerType.TIME ? "at " + value : "on event '" + value + "'";
         return home.getScenarios().stream()
                 .filter(AutomationScenario::isEnabled)
                 .filter(s -> s.getTrigger().type() == type && value.equalsIgnoreCase(s.getTrigger().value()))
-                .map(s -> s.execute(home))
+                .toList().stream()
+                .map(s -> run(s, cause))
                 .toList();
     }
 }

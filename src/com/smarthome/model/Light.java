@@ -30,6 +30,15 @@ public class Light extends Device {
         }
     }
 
+    /** A light dimmed to 0% comes back at full brightness when switched on. */
+    @Override
+    public void turnOn() {
+        if (brightness == 0) {
+            brightness = 100;
+        }
+        super.turnOn();
+    }
+
     public int getBrightness() {
         return brightness;
     }

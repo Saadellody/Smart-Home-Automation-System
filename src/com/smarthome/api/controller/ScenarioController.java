@@ -10,6 +10,7 @@ import com.smarthome.model.Action;
 import com.smarthome.model.Trigger;
 import com.smarthome.model.enums.ActionType;
 import com.smarthome.model.enums.DeviceType;
+import com.smarthome.model.enums.SecurityAction;
 import com.smarthome.model.enums.TriggerType;
 import com.smarthome.service.AutomationService;
 
@@ -35,10 +36,18 @@ public class ScenarioController {
             AutomationScenarioBuilder builder = AutomationScenarioBuilder.scenario(body.requiredString("name"))
                     .description(body.optString("description"))
                     .trigger(parseTrigger(body))
-                    .addActions(actions);
+                    .addActions(actions)
+                    .security(body.optEnum("securityMode", SecurityAction.class));
             Boolean enabled = body.optBoolean("enabled");
             if (enabled != null) {
                 builder.enabled(enabled);
+            }
+            Boolean notify = body.optBoolean("notifyOnExecution");
+            if (notify != null) {
+                builder.notifyOnExecution(notify);
+            }
+            if (body.has("notificationMessage")) {
+                builder.notifyWith(body.optString("notificationMessage"));
             }
             return Response.created(JsonMapper.scenario(automationService.createScenario(builder)));
         });
@@ -47,8 +56,15 @@ public class ScenarioController {
         router.put("/api/scenarios/{id}", req -> {
             JsonBody body = req.body();
             return Response.ok(JsonMapper.scenario(automationService.updateScenario(req.pathParam("id"),
-                    body.optString("name"), body.optString("description"), parseTrigger(body),
-                    parseActions(body), body.optBoolean("enabled"))));
+                    new AutomationService.ScenarioChanges(
+                            body.optString("name"),
+                            body.optString("description"),
+                            parseTrigger(body),
+                            parseActions(body),
+                            body.optBoolean("enabled"),
+                            body.optEnum("securityMode", SecurityAction.class),
+                            body.optBoolean("notifyOnExecution"),
+                            body.optString("notificationMessage")))));
         });
         router.delete("/api/scenarios/{id}", req -> {
             automationService.deleteScenario(req.pathParam("id"));
@@ -63,6 +79,15 @@ public class ScenarioController {
                 req -> Response.ok(JsonMapper.scenario(automationService.enable(req.pathParam("id")))));
         router.post("/api/scenarios/{id}/disable",
                 req -> Response.ok(JsonMapper.scenario(automationService.disable(req.pathParam("id")))));
+        router.post("/api/scenarios/{id}/save-as-template", req -> {
+            String key = req.body().requiredString("key");
+            automationService.saveAsTemplate(req.pathParam("id"), key);
+            return Response.created(JsonMapper.templates(automationService.listTemplates()));
+        });
+
+        router.get("/api/templates", req -> Response.ok(JsonMapper.templates(automationService.listTemplates())));
+        router.post("/api/templates/{key}/create", req -> Response.created(JsonMapper.scenario(
+                automationService.createFromTemplate(req.pathParam("key"), req.body().optString("name")))));
 
         router.post("/api/events", req -> {
             String event = req.body().requiredString("name");
@@ -85,11 +110,13 @@ public class ScenarioController {
         if (actions == null) {
             return null;
         }
-        return actions.stream().map(a -> new Action(
-                a.requiredEnum("type", ActionType.class),
-                a.optString("deviceId"),
-                a.optEnum("deviceType", DeviceType.class),
-                a.optString("roomId"),
-                a.optDouble("value"))).toList();
+        return actions.stream().map(a -> {
+            ActionType type = a.requiredEnum("type", ActionType.class);
+            return new Action(type,
+                    a.optString("deviceId"),
+                    a.optEnum("deviceType", DeviceType.class),
+                    a.optString("roomId"),
+                    JsonMapper.toDomainValue(type, a.optDouble("value")));
+        }).toList();
     }
 }

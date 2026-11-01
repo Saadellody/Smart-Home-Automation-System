@@ -21,6 +21,20 @@ import com.smarthome.service.AutomationService;
 import com.smarthome.service.DeviceService;
 import com.smarthome.service.RoomService;
 import com.smarthome.service.SmartHomeService;
+import com.smarthome.service.NotificationService;
+import com.smarthome.service.Services;
+import com.smarthome.cli.CommandLineInterface;
+import com.smarthome.exception.SecurityModeException;
+import com.smarthome.model.Camera;
+import com.smarthome.model.DoorLock;
+import com.smarthome.model.enums.SecurityAction;
+import com.smarthome.model.enums.TemperatureUnit;
+
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import com.smarthome.singleton.SmartHomeManager;
 
 import java.lang.reflect.Method;
@@ -44,10 +58,12 @@ import java.util.concurrent.Executors;
 public class SmartHomeTests {
 
     private final SmartHomeManager manager = SmartHomeManager.getInstance();
-    private final SmartHomeService homes = new SmartHomeService(manager);
-    private final RoomService rooms = new RoomService(manager);
-    private final DeviceService devices = new DeviceService(manager, rooms);
-    private final AutomationService automations = new AutomationService(manager);
+    private final Services services = Services.create(manager);
+    private final SmartHomeService homes = services.homes();
+    private final RoomService rooms = services.rooms();
+    private final DeviceService devices = services.devices();
+    private final AutomationService automations = services.automations();
+    private final NotificationService notifications = services.notifications();
 
     public static void main(String[] args) throws Exception {
         SmartHomeTests suite = new SmartHomeTests();
@@ -177,11 +193,152 @@ public class SmartHomeTests {
         check(a.getDevices().isEmpty() && b.getDevices().contains(d) && d.getRoom() == b, "moved");
     }
 
+    public void testLightTurnedOnAfterDimmingToZeroIsBright() {
+        Room room = rooms.createRoom("Living", RoomType.LIVING_ROOM);
+        Light light = (Light) devices.addDevice(room.getId(), DeviceType.LIGHT, "L");
+        light.setBrightness(0);
+        devices.turnOn(light.getId());
+        check(light.isOn() && light.getBrightness() == 100, "brightness restored");
+    }
+
+    // ------------------------------------------------------------------ temperature unit
+
+    public void testFahrenheitConversion() {
+        check(TemperatureUnit.FAHRENHEIT.fromCelsius(21) == 69.8, "21C = 69.8F");
+        check(Math.abs(TemperatureUnit.FAHRENHEIT.toCelsius(212) - 100) < 1e-9, "212F = 100C");
+        homes.updateConfiguration(TemperatureUnit.FAHRENHEIT, 68.0, null, null, null);
+        check(homes.getConfiguration().getDefaultTemperature() == 20, "68F stored as 20C");
+        check(homes.getConfiguration().fromCelsius(homes.getConfiguration().getDefaultTemperature()) == 68, "shown as 68F");
+    }
+
+    // ------------------------------------------------------------------ security mode
+
+    public void testArmingLocksDoorsRecordsCamerasAndBlocksUnlocking() {
+        Room room = rooms.createRoom("Garage", RoomType.GARAGE);
+        DoorLock lock = (DoorLock) devices.addDevice(room.getId(), DeviceType.DOOR_LOCK, "Door");
+        Camera camera = (Camera) devices.addDevice(room.getId(), DeviceType.CAMERA, "Cam");
+        lock.unlock();
+
+        homes.updateConfiguration(null, null, true, null, null);
+        check(lock.isLocked() && camera.isRecording(), "armed: locked and recording");
+        expect(SecurityModeException.class, () -> devices.executeCommand(lock.getId(), ActionType.UNLOCK, null));
+        expect(SecurityModeException.class, () -> devices.turnOff(camera.getId()));
+        devices.executeCommand(lock.getId(), ActionType.LOCK, null); // strengthening is still allowed
+
+        homes.disarmSecurity();
+        devices.executeCommand(lock.getId(), ActionType.UNLOCK, null);
+        check(!lock.isLocked(), "unlocked after disarm");
+    }
+
+    public void testScenarioSecurityModes() {
+        Room room = rooms.createRoom("Hall", RoomType.LIVING_ROOM);
+        DoorLock lock = (DoorLock) devices.addDevice(room.getId(), DeviceType.DOOR_LOCK, "Door");
+        AutomationScenario night = automations.createScenario(AutomationScenarioBuilder.scenario("Night")
+                .turnOffAll(DeviceType.LIGHT).armSecurity());
+        AutomationScenario unlockWhileArmed = automations.createScenario(AutomationScenarioBuilder.scenario("Bad")
+                .addAction(Action.forAll(DeviceType.DOOR_LOCK, ActionType.UNLOCK)));
+        AutomationScenario morning = automations.createScenario(AutomationScenarioBuilder.scenario("Morning")
+                .disarmSecurity().addAction(Action.forAll(DeviceType.DOOR_LOCK, ActionType.UNLOCK)));
+
+        automations.execute(night.getId());
+        check(manager.getHome().isSecurityArmed(), "night arms security");
+        var report = automations.execute(unlockWhileArmed.getId());
+        check(report.count(com.smarthome.model.ExecutionReport.Outcome.FAILED) == 1 && lock.isLocked(), "unlock blocked");
+        automations.execute(morning.getId());
+        check(!manager.getHome().isSecurityArmed() && !lock.isLocked(), "morning disarms first, then unlocks");
+    }
+
+    // ------------------------------------------------------------------ notifications
+
+    public void testNotificationsRecordedOnlyWhenEnabled() {
+        Room room = rooms.createRoom("Living", RoomType.LIVING_ROOM);
+        devices.addDevice(room.getId(), DeviceType.LIGHT, "L");
+        AutomationScenario s = automations.createScenario(AutomationScenarioBuilder.scenario("Lights off")
+                .turnOffAll(DeviceType.LIGHT));
+        AutomationScenario custom = automations.createScenario(AutomationScenarioBuilder.scenario("Custom")
+                .turnOffAll(DeviceType.LIGHT).notifyWith("All lights are off"));
+        AutomationScenario quiet = automations.createScenario(AutomationScenarioBuilder.scenario("Quiet")
+                .turnOffAll(DeviceType.LIGHT).silent());
+
+        automations.execute(s.getId());
+        automations.execute(custom.getId());
+        automations.execute(quiet.getId());
+        check(notifications.list().size() == 2, "silent scenario sends nothing");
+        check(notifications.list().get(0).message().equals("All lights are off"), "custom message, newest first");
+        check(notifications.list().get(1).message().contains("1 applied"), "generated summary");
+
+        homes.updateConfiguration(null, null, null, false, null);
+        automations.execute(s.getId());
+        homes.armSecurity();
+        check(notifications.list().size() == 2, "disabled -> nothing recorded");
+        notifications.clear();
+        check(notifications.list().isEmpty(), "cleared");
+    }
+
+    // ------------------------------------------------------------------ templates (Prototype registry)
+
+    public void testTemplatesCreateIndependentScenarios() {
+        Room room = rooms.createRoom("Living", RoomType.LIVING_ROOM);
+        devices.addDevice(room.getId(), DeviceType.LIGHT, "L");
+        check(automations.listTemplates().containsKey("good-night"), "built-in template");
+
+        AutomationScenario a = automations.createFromTemplate("good-night", null);
+        AutomationScenario b = automations.createFromTemplate("Good Night", "Night 2");
+        check(!a.getId().equals(b.getId()) && b.getName().equals("Night 2"), "independent copies");
+        check(a.getSecurityAction() == SecurityAction.ARM, "template security kept");
+        a.addAction(Action.forAll(DeviceType.FAN, ActionType.TURN_OFF));
+        check(automations.listTemplates().get("good-night").getActions().size() == b.getActions().size(),
+                "editing a copy does not change the template");
+
+        automations.saveAsTemplate(a.getId(), "My Night");
+        check(automations.createFromTemplate("my-night", null).getActions().size() == a.getActions().size(), "saved template");
+        expect(com.smarthome.exception.ResourceNotFoundException.class, () -> automations.createFromTemplate("nope", null));
+    }
+
+    // ------------------------------------------------------------------ CLI
+
+    public void testCommandLineInterface() throws Exception {
+        String script = String.join("\n",
+                "room add OFFICE My Office",
+                "device add room-%1$s LIGHT Desk Lamp",
+                "set unit F",
+                "device add room-%1$s THERMOSTAT Office Thermostat",
+                "scenario new",
+                "Work",
+                "Focus lighting",
+                "event start-work",
+                "none",
+                "Time to work",
+                "LIGHT SET_BRIGHTNESS 70",
+                "THERMOSTAT SET_TEMPERATURE 70",
+                "",
+                "set automode on",
+                "event start-work",
+                "notifications",
+                "bogus",
+                "exit");
+        // Room ids come from a global counter, so ask the service which id the next room will get.
+        String nextRoomNumber = String.valueOf(Integer.parseInt(
+                rooms.createRoom("probe", RoomType.OFFICE).getId().substring(5)) + 1);
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        new CommandLineInterface(services, new BufferedReader(new StringReader(String.format(script, nextRoomNumber))),
+                new PrintStream(buffer, true, StandardCharsets.UTF_8)).run();
+        String output = buffer.toString(StandardCharsets.UTF_8);
+
+        Light lamp = (Light) devices.listDevices(DeviceType.LIGHT, null, null).get(0);
+        Thermostat thermostat = (Thermostat) devices.listDevices(DeviceType.THERMOSTAT, null, null).get(0);
+        check(lamp.isOn() && lamp.getBrightness() == 70, "event ran the scenario: " + output);
+        check(Math.abs(thermostat.getTargetTemperature() - 21.1) < 0.1, "70F stored as ~21.1C");
+        check(output.contains("Time to work"), "notification printed");
+        check(output.contains("Unknown command 'bogus'"), "unknown command reported");
+        check(output.contains("Bye."), "exit");
+    }
+
     // ------------------------------------------------------------------ REST API
 
     public void testRestApiEndToEnd() throws Exception {
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        ApiServer server = new ApiServer("localhost", 0, executor, homes, rooms, devices, automations);
+        ApiServer server = new ApiServer("localhost", 0, executor, homes, rooms, devices, automations, notifications);
         server.start();
         String base = "http://localhost:" + server.getPort() + "/api";
         try {
@@ -226,6 +383,33 @@ public class SmartHomeTests {
             check(call("PATCH", base + "/rooms", null).status == 405, "405");
             check(call("DELETE", base + "/devices/" + lightId, null).status == 204, "delete");
             check(call("GET", base + "/devices/" + lightId, null).status == 404, "deleted");
+
+            // Fahrenheit: thermostat values in and out of the API follow the configured unit.
+            call("PUT", base + "/home/configuration", "{\"temperatureUnit\":\"FAHRENHEIT\"}");
+            String thermoId = (String) call("POST", base + "/devices",
+                    "{\"roomId\":\"" + roomId + "\",\"type\":\"THERMOSTAT\",\"name\":\"T\"}").map().get("id");
+            Http heat = call("POST", base + "/devices/" + thermoId + "/commands", "{\"type\":\"SET_TEMPERATURE\",\"value\":77}");
+            check(toDouble(heat.map().get("targetTemperature")) == 77.0, "77F round-trips: " + heat.body);
+            check(((Thermostat) devices.getDevice(thermoId)).getTargetTemperature() == 25.0, "stored as 25C");
+
+            // Security, notifications, templates.
+            Http armed = call("POST", base + "/home/security/arm", null);
+            check(armed.map().get("securityArmed") == Boolean.TRUE, "armed");
+            String doorId = (String) call("GET", base + "/devices?type=DOOR_LOCK", null).list().stream()
+                    .map(d -> ((Map<?, ?>) d).get("id")).findFirst().orElseThrow();
+            check(call("POST", base + "/devices/" + doorId + "/commands", "{\"type\":\"UNLOCK\"}").status == 422, "unlock blocked");
+            check(!call("GET", base + "/notifications", null).list().isEmpty(), "notifications recorded");
+            check(call("DELETE", base + "/notifications", null).status == 204, "notifications cleared");
+            check(call("POST", base + "/home/security/disarm", null).map().get("securityArmed") == Boolean.FALSE, "disarmed");
+
+            check(call("GET", base + "/templates", null).list().size() >= 5, "templates listed");
+            Http fromTemplate = call("POST", base + "/templates/good-night/create", "{\"name\":\"Bedtime\"}");
+            check(fromTemplate.status == 201 && "ARM".equals(fromTemplate.map().get("securityMode")), "template used: " + fromTemplate.body);
+            Http updated = call("PUT", base + "/scenarios/" + fromTemplate.map().get("id"),
+                    "{\"securityMode\":\"NONE\",\"notifyOnExecution\":false}");
+            check("NONE".equals(updated.map().get("securityMode")) && updated.map().get("notifyOnExecution") == Boolean.FALSE, "updated");
+            check(call("POST", base + "/scenarios/" + fromTemplate.map().get("id") + "/save-as-template",
+                    "{\"key\":\"bedtime\"}").status == 201, "saved as template");
         } finally {
             server.stop();
             executor.shutdownNow();

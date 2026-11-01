@@ -6,23 +6,25 @@ import com.smarthome.model.AutomationScenario;
 import com.smarthome.model.Trigger;
 import com.smarthome.model.enums.ActionType;
 import com.smarthome.model.enums.DeviceType;
+import com.smarthome.model.enums.SecurityAction;
 import com.smarthome.util.IdGenerator;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Builder: a scenario has a required name, an optional description and trigger, and any number of
- * actions. Building it step by step keeps call sites readable:
+ * Builder: a scenario has a required name and many optional parts: description, trigger (schedule),
+ * actions, temperature, lighting, security and notification settings. Building it step by step keeps
+ * call sites readable:
  *
  * <pre>
  * AutomationScenario goodNight = AutomationScenarioBuilder.scenario("Good Night")
  *         .at("22:30")
- *         .turnOffAll(DeviceType.LIGHT)
+ *         .lighting(0)
  *         .turnOffAll(DeviceType.TV)
- *         .lockAllDoors()
- *         .startRecordingAllCameras()
  *         .temperature(19)
+ *         .armSecurity()
+ *         .notifyWith("Good night! The house is locked.")
  *         .build();
  * </pre>
  */
@@ -34,6 +36,9 @@ public class AutomationScenarioBuilder {
     private Trigger trigger = Trigger.manual();
     private final List<Action> actions = new ArrayList<>();
     private boolean enabled = true;
+    private SecurityAction securityAction = SecurityAction.NONE;
+    private boolean notifyOnExecution = true;
+    private String notificationMessage;
 
     public AutomationScenarioBuilder(String name) {
         this.name = name;
@@ -125,6 +130,55 @@ public class AutomationScenarioBuilder {
         return addAction(Action.forAll(DeviceType.CAMERA, ActionType.START_RECORDING));
     }
 
+    // ---- lighting configuration ----
+
+    /** Sets every light of the home to the given brightness (0 turns them off). */
+    public AutomationScenarioBuilder lighting(int percent) {
+        return addAction(Action.forAll(DeviceType.LIGHT, ActionType.SET_BRIGHTNESS, (double) percent));
+    }
+
+    /** Sets every light of one room to the given brightness. */
+    public AutomationScenarioBuilder lighting(String roomId, int percent) {
+        return addAction(Action.forAllInRoom(roomId, DeviceType.LIGHT, ActionType.SET_BRIGHTNESS, (double) percent));
+    }
+
+    // ---- security configuration ----
+
+    /** Arms security mode once the actions have run (doors locked, cameras recording). */
+    public AutomationScenarioBuilder armSecurity() {
+        this.securityAction = SecurityAction.ARM;
+        return this;
+    }
+
+    /** Disarms security mode before the actions run, so they may unlock doors. */
+    public AutomationScenarioBuilder disarmSecurity() {
+        this.securityAction = SecurityAction.DISARM;
+        return this;
+    }
+
+    public AutomationScenarioBuilder security(SecurityAction securityAction) {
+        this.securityAction = securityAction;
+        return this;
+    }
+
+    // ---- notification configuration ----
+
+    /** Sends this text instead of the generated summary when the scenario runs. */
+    public AutomationScenarioBuilder notifyWith(String message) {
+        this.notifyOnExecution = true;
+        this.notificationMessage = message;
+        return this;
+    }
+
+    public AutomationScenarioBuilder notifyOnExecution(boolean notify) {
+        this.notifyOnExecution = notify;
+        return this;
+    }
+
+    public AutomationScenarioBuilder silent() {
+        return notifyOnExecution(false);
+    }
+
     public AutomationScenario build() {
         if (name == null || name.isBlank()) {
             throw new InvalidAutomationException("Scenario name is required");
@@ -133,6 +187,7 @@ public class AutomationScenarioBuilder {
             throw new InvalidAutomationException("Scenario '" + name + "' needs at least one action");
         }
         String scenarioId = id == null ? IdGenerator.next("scn") : id;
-        return new AutomationScenario(scenarioId, name, description, trigger, actions, enabled);
+        return new AutomationScenario(scenarioId, name, description, trigger, actions, enabled,
+                securityAction, notifyOnExecution, notificationMessage);
     }
 }

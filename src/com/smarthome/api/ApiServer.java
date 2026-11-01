@@ -6,6 +6,7 @@ import com.smarthome.api.controller.RoomController;
 import com.smarthome.api.controller.ScenarioController;
 import com.smarthome.service.AutomationService;
 import com.smarthome.service.DeviceService;
+import com.smarthome.service.NotificationService;
 import com.smarthome.service.RoomService;
 import com.smarthome.service.SmartHomeService;
 import com.sun.net.httpserver.HttpServer;
@@ -23,8 +24,9 @@ public class ApiServer {
 
     public ApiServer(String host, int port, Executor executor,
                      SmartHomeService smartHomeService, RoomService roomService,
-                     DeviceService deviceService, AutomationService automationService) throws IOException {
-        new HomeController(smartHomeService).register(router);
+                     DeviceService deviceService, AutomationService automationService,
+                     NotificationService notificationService) throws IOException {
+        new HomeController(smartHomeService, notificationService).register(router);
         new RoomController(roomService, deviceService).register(router);
         new DeviceController(deviceService).register(router);
         new ScenarioController(automationService).register(router);
