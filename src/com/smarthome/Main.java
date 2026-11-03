@@ -61,7 +61,11 @@ public class Main {
             server.stop();
             executor.shutdownNow();
         }));
-        System.out.println("Smart Home API running on http://" + host + ":" + server.getPort() + "/api");
+        String base = "http://" + host + ":" + server.getPort();
+        System.out.println("Smart Home API running on " + base + "/api");
+        System.out.println(server.isDashboardAvailable()
+                ? "Dashboard: " + base + "/"
+                : "Dashboard files (web/index.html) not found; run from the project folder to get the dashboard.");
     }
 
     private static String option(List<String> args, String name, String defaultValue) {

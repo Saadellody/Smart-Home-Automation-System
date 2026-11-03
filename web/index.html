@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Home Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%233b6ef5' d='M12 3 2 11h3v9h5v-6h4v6h5v-9h3z'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f4f6fb; --surface: #ffffff; --surface-2: #f0f2f8; --border: #dfe3ee;
+    --text: #1b2130; --muted: #667089; --accent: #3b6ef5; --accent-soft: #e6edff;
+    --ok: #18a058; --ok-soft: #e3f6ec; --warn: #d68a00; --warn-soft: #fff3db;
+    --danger: #d64545; --danger-soft: #fde8e8; --on: #f5b301;
+    --shadow: 0 1px 2px rgba(20, 30, 60, .06), 0 4px 14px rgba(20, 30, 60, .05);
+    --radius: 12px; --mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f131c; --surface: #171c28; --surface-2: #1e2433; --border: #2a3245;
+      --text: #e6e9f2; --muted: #8d97b0; --accent: #6b8fff; --accent-soft: #212c4d;
+      --ok: #3ccf82; --ok-soft: #173326; --warn: #f0b23c; --warn-soft: #3a2e14;
+      --danger: #ff6b6b; --danger-soft: #3d1d1f; --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f131c; --surface: #171c28; --surface-2: #1e2433; --border: #2a3245;
+    --text: #e6e9f2; --muted: #8d97b0; --accent: #6b8fff; --accent-soft: #212c4d;
+    --ok: #3ccf82; --ok-soft: #173326; --warn: #f0b23c; --warn-soft: #3a2e14;
+    --danger: #ff6b6b; --danger-soft: #3d1d1f; --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  h1, h2, h3 { margin: 0; line-height: 1.2; }
+  h2 { font-size: 18px; }
+  h3 { font-size: 15px; }
+  .muted { color: var(--muted); }
+  .mono { font-family: var(--mono); font-size: 12px; }
+
+  /* ---------- layout ---------- */
+  header.top { position: sticky; top: 0; z-index: 10; background: var(--surface);
+               border-bottom: 1px solid var(--border); }
+  .bar { max-width: 1280px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px;
+         align-items: center; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; min-width: 0; }
+  .brand .logo { width: 34px; height: 34px; border-radius: 9px; background: var(--accent);
+                 display: grid; place-items: center; color: #fff; flex: none; }
+  .brand h1 { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand small { display: block; color: var(--muted); font-size: 12px; }
+  nav.tabs { max-width: 1280px; margin: 0 auto; padding: 0 16px; display: flex; gap: 4px; overflow-x: auto; }
+  nav.tabs button { border: 0; background: none; padding: 10px 12px; color: var(--muted); cursor: pointer;
+                    border-bottom: 2px solid transparent; white-space: nowrap; font-weight: 500; }
+  nav.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  nav.tabs .count { background: var(--accent-soft); color: var(--accent); border-radius: 99px;
+                    padding: 0 7px; font-size: 11px; margin-left: 4px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+  .view { display: none; }
+  .view.active { display: block; }
+  .section-head { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; flex-wrap: wrap; }
+  .section-head h2 { margin-right: auto; }
+  .grid { display: grid; gap: 16px; }
+  .cols-2 { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+  @media (max-width: 900px) { .cols-2 { grid-template-columns: minmax(0, 1fr); } }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+          box-shadow: var(--shadow); padding: 16px; min-width: 0; }
+  .card + .card { margin-top: 16px; }
+  .stack > * + * { margin-top: 10px; }
+
+  /* ---------- controls ---------- */
+  .btn { border: 1px solid var(--border); background: var(--surface); padding: 6px 12px; border-radius: 8px;
+         cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.danger { color: var(--danger); }
+  .btn.danger:hover { border-color: var(--danger); background: var(--danger-soft); }
+  .btn.small { padding: 3px 9px; font-size: 12px; }
+  .btn.ghost { border-color: transparent; background: none; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  input[type=text], input[type=number], input[type=time], select, textarea {
+    border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 6px 9px;
+    min-width: 0; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+  textarea { width: 100%; font-family: var(--mono); font-size: 12px; resize: vertical; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  label.field { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+  label.field > input, label.field > select { color: var(--text); font-size: 14px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .row > .grow { flex: 1 1 140px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: var(--surface); padding: 5px 11px; cursor: pointer; }
+  .seg button.active { background: var(--accent); color: #fff; }
+  .switch { position: relative; width: 40px; height: 22px; flex: none; cursor: pointer; border: 0;
+            border-radius: 99px; background: var(--border); transition: background .15s; padding: 0; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+                   border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .switch.on { background: var(--ok); }
+  .switch.on::after { transform: translateX(18px); }
+  .chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 99px;
+          font-size: 12px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
+  .chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+  .chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+  .chip.danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+  .chip.accent { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.ok { background: var(--ok); } .dot.bad { background: var(--danger); }
+
+  /* ---------- dashboard ---------- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow); }
+  .stat .label { font-size: 12px; color: var(--muted); }
+  .stat .value { font-size: 22px; font-weight: 650; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rooms { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 16px; }
+  .room-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .room-head h3 { margin-right: auto; }
+  .devices { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .device { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); }
+  .device.on { border-color: color-mix(in srgb, var(--on) 55%, var(--border)); }
+  .device-top { display: flex; align-items: center; gap: 10px; }
+  .device-icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 18px;
+                 background: var(--surface); border: 1px solid var(--border); flex: none; }
+  .device.on .device-icon { background: color-mix(in srgb, var(--on) 22%, var(--surface)); }
+  .device-name { font-weight: 600; min-width: 0; flex: 1; }
+  .device-name small { display: block; font-weight: 400; color: var(--muted); font-size: 12px;
+                       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .device-controls { margin-top: 10px; display: grid; gap: 8px; }
+  .device-foot { margin-top: 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .device-foot select { font-size: 12px; padding: 3px 6px; }
+  .ctl { display: grid; grid-template-columns: 90px 1fr auto; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+  .ctl b { color: var(--text); font-weight: 600; font-size: 13px; }
+  .empty { color: var(--muted); text-align: center; padding: 18px; border: 1px dashed var(--border); border-radius: 10px; }
+
+  /* ---------- scenarios ---------- */
+  .scenario { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: var(--surface); }
+  .scenario + .scenario { margin-top: 10px; }
+  .scenario.disabled { opacity: .65; }
+  .scenario-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .scenario-head h3 { margin-right: auto; }
+  .action-list { margin: 8px 0 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+  .action-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 76px auto; gap: 6px; align-items: center;
+                padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+  .action-row [data-part=target] { grid-column: 1 / 4; }
+  .action-row [data-act=remove-action-row] { grid-column: 4; grid-row: 1; }
+  .action-row select, .action-row input { background: var(--surface); }
+  .report { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .report td, .report th { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+
+  /* ---------- api explorer ---------- */
+  .endpoints { display: grid; gap: 14px; max-height: 70vh; overflow: auto; }
+  .ep-group h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+  .ep { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; border: 1px solid transparent;
+        background: none; padding: 5px 8px; border-radius: 7px; cursor: pointer; }
+  .ep:hover { background: var(--surface-2); border-color: var(--border); }
+  .method { font: 600 11px var(--mono); padding: 2px 6px; border-radius: 5px; min-width: 56px; text-align: center; }
+  .m-GET { background: var(--ok-soft); color: var(--ok); }
+  .m-POST { background: var(--accent-soft); color: var(--accent); }
+  .m-PUT { background: var(--warn-soft); color: var(--warn); }
+  .m-DELETE { background: var(--danger-soft); color: var(--danger); }
+  pre.out { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px;
+            overflow: auto; max-height: 55vh; font: 12px/1.5 var(--mono); margin: 0; white-space: pre-wrap; word-break: break-word; }
+
+  /* ---------- overlays ---------- */
+  #toasts { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 50; max-width: min(380px, calc(100vw - 32px)); }
+  .toast { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--ok);
+           border-radius: 8px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.18); }
+  .toast.error { border-left-color: var(--danger); }
+  dialog { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text);
+           padding: 0; width: min(720px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(10, 15, 30, .45); }
+  dialog .dlg-head { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  dialog .dlg-head h2 { margin-right: auto; }
+  dialog .dlg-body { padding: 16px; max-height: 70vh; overflow: auto; }
+  .banner { padding: 10px 12px; border-radius: 8px; background: var(--danger-soft); color: var(--danger); margin-bottom: 16px; display: none; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <div class="brand">
+      <div class="logo"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 3 2 11h3v9h5v-6h4v6h5v-9h3z"/></svg></div>
+      <div style="min-width:0"><h1 id="home-name">Smart Home</h1><small id="home-sub">connecting…</small></div>
+    </div>
+    <span class="chip" id="conn"><span class="dot"></span> API</span>
+    <button class="btn" id="security-btn" data-act="toggle-security">Security</button>
+    <div class="seg" id="unit-seg" title="Temperature unit">
+      <button data-act="unit" data-unit="CELSIUS">°C</button><button data-act="unit" data-unit="FAHRENHEIT">°F</button>
+    </div>
+    <button class="btn ghost" data-act="theme" title="Switch light / dark">◐</button>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-view="dashboard" class="active">Rooms &amp; devices</button>
+    <button data-view="scenarios">Scenarios <span class="count" id="count-scenarios">0</span></button>
+    <button data-view="templates">Templates <span class="count" id="count-templates">0</span></button>
+    <button data-view="notifications">Notifications <span class="count" id="count-notifications">0</span></button>
+    <button data-view="settings">Home &amp; settings</button>
+    <button data-view="api">API explorer</button>
+  </nav>
+</header>
+
+<main>
+  <div class="banner" id="offline">Cannot reach the API. Start the server from the project folder (<span class="mono">java -cp out com.smarthome.Main</span>), then open <a href="http://localhost:8080/">http://localhost:8080/</a>. The dashboard reconnects on its own.</div>
+
+  <!-- ===================== ROOMS & DEVICES ===================== -->
+  <section class="view active" id="view-dashboard">
+    <div class="stats" id="stats"></div>
+    <div class="section-head">
+      <h2>Rooms</h2>
+      <div class="row">
+        <select id="device-filter" title="Filter devices (GET /api/devices?type=…&status=…)">
+          <option value="">All devices</option>
+        </select>
+        <select id="status-filter"><option value="">Any status</option><option value="ON">On</option><option value="OFF">Off</option></select>
+      </div>
+    </div>
+    <form class="card row" id="add-room-form" style="margin-bottom:16px">
+      <strong>New room</strong>
+      <input type="text" name="name" placeholder="Room name" required class="grow">
+      <select name="type" id="room-type-select"></select>
+      <button class="btn primary">Add room</button>
+    </form>
+    <div class="rooms" id="rooms"></div>
+  </section>
+
+  <!-- ===================== SCENARIOS ===================== -->
+  <section class="view" id="view-scenarios">
+    <div class="grid cols-2">
+      <div>
+        <div class="section-head"><h2>Automation scenarios</h2>
+          <button class="btn" data-act="new-scenario">+ New scenario</button></div>
+        <div id="scenario-list"></div>
+      </div>
+      <div>
+        <form class="card stack" id="scenario-form">
+          <div class="section-head" style="margin:0"><h2 id="scenario-form-title">New scenario</h2>
+            <button type="button" class="btn small ghost" data-act="new-scenario">Reset</button></div>
+          <input type="hidden" name="scenarioId">
+          <label class="field">Name<input type="text" name="name" required placeholder="e.g. Good Night"></label>
+          <label class="field">Description<input type="text" name="description" placeholder="optional"></label>
+          <div class="row">
+            <label class="field grow">Trigger
+              <select name="triggerType"><option value="MANUAL">Manual</option><option value="TIME">At a time</option><option value="EVENT">On an event</option></select></label>
+            <label class="field grow" id="trigger-value-field">Value<input type="text" name="triggerValue" placeholder=""></label>
+          </div>
+          <div class="row">
+            <label class="field grow">Security mode
+              <select name="securityMode"><option value="NONE">Leave unchanged</option><option value="ARM">Arm after actions</option><option value="DISARM">Disarm before actions</option></select></label>
+            <label class="field grow">Enabled
+              <select name="enabled"><option value="true">Yes</option><option value="false">No</option></select></label>
+          </div>
+          <div class="row">
+            <label class="field grow">Notification
+              <select name="notify"><option value="summary">Send summary</option><option value="custom">Custom message</option><option value="off">Silent</option></select></label>
+            <label class="field grow" id="notify-msg-field">Message<input type="text" name="notificationMessage"></label>
+          </div>
+          <div>
+            <div class="section-head" style="margin:6px 0"><h3>Actions</h3>
+              <button type="button" class="btn small" data-act="add-action-row">+ Add action</button></div>
+            <div class="stack" id="action-rows"></div>
+            <p class="muted" style="font-size:12px;margin:8px 0 0">Target one device, or every device of a type (optionally in one room). Temperatures use the current unit.</p>
+          </div>
+          <div class="row"><button class="btn primary" id="scenario-submit">Create scenario</button></div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TEMPLATES ===================== -->
+  <section class="view" id="view-templates">
+    <div class="section-head"><h2>Scenario templates</h2>
+      <span class="muted">Prototype registry: each “Add to home” creates an independent copy.</span></div>
+    <div class="rooms" id="template-list"></div>
+  </section>
+
+  <!-- ===================== NOTIFICATIONS ===================== -->
+  <section class="view" id="view-notifications">
+    <div class="section-head"><h2>Notifications</h2>
+      <span id="notif-state" class="chip"></span>
+      <button class="btn danger" data-act="clear-notifications">Clear all</button></div>
+    <div class="card" id="notification-list"></div>
+  </section>
+
+  <!-- ===================== SETTINGS ===================== -->
+  <section class="view" id="view-settings">
+    <div class="grid cols-2">
+      <div>
+        <form class="card stack" id="config-form">
+          <h2>Configuration</h2>
+          <div class="row">
+            <label class="field grow">Temperature unit
+              <select name="temperatureUnit"><option value="CELSIUS">Celsius (°C)</option><option value="FAHRENHEIT">Fahrenheit (°F)</option></select></label>
+            <label class="field grow"><span>Default thermostat temperature (<span class="unit-symbol">°C</span>)</span>
+              <input type="number" step="0.5" name="defaultTemperature"></label>
+          </div>
+          <div class="row"><button type="button" class="switch" data-flag="securityEnabled"></button><div><b>Security mode</b><div class="muted">Locks doors, records cameras, blocks unlocking</div></div></div>
+          <div class="row"><button type="button" class="switch" data-flag="notificationsEnabled"></button><div><b>Notifications</b><div class="muted">Record scenario runs and security events</div></div></div>
+          <div class="row"><button type="button" class="switch" data-flag="autoModeEnabled"></button><div><b>Auto mode</b><div class="muted">Let TIME and EVENT triggers run by themselves</div></div></div>
+          <div class="row"><button class="btn primary">Save configuration</button></div>
+        </form>
+
+        <form class="card stack" id="event-form">
+          <h2>Fire an event</h2>
+          <p class="muted" style="margin:0">Runs every enabled scenario with an EVENT trigger of that name (auto mode must be on).</p>
+          <div class="row"><input type="text" name="name" placeholder="e.g. arrived-home" required class="grow" list="event-names">
+            <datalist id="event-names"></datalist>
+            <button class="btn primary">Fire</button></div>
+        </form>
+
+        <div class="card">
+          <div class="section-head"><h2>Home state</h2><button class="btn small" data-act="load-state">Refresh</button></div>
+          <pre class="out" id="home-state">…</pre>
+        </div>
+      </div>
+      <div>
+        <form class="card stack" id="home-form">
+          <h2>Home</h2>
+          <label class="field">Name<input type="text" name="name" required></label>
+          <label class="field">Ecosystem (for new devices)<select name="ecosystem" class="ecosystem-select"></select></label>
+          <div class="row"><button class="btn primary">Save</button></div>
+        </form>
+        <form class="card stack" id="new-home-form">
+          <h2>Start a new home</h2>
+          <p class="muted" style="margin:0">Replaces the current home with an empty one. Everything is lost.</p>
+          <label class="field">Name<input type="text" name="name" required placeholder="My New Home"></label>
+          <label class="field">Ecosystem<select name="ecosystem" class="ecosystem-select"></select></label>
+          <div class="row"><button class="btn danger">Create new home</button></div>
+        </form>
+        <div class="card stack">
+          <h2>Server</h2>
+          <div class="row"><span class="muted">Health</span><span id="health" class="chip">…</span></div>
+          <p class="muted" style="margin:0">Data is kept in memory: restarting the server resets it to the demo home.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== API EXPLORER ===================== -->
+  <section class="view" id="view-api">
+    <div class="grid cols-2" style="grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)">
+      <div class="card">
+        <div class="section-head"><h2>Endpoints</h2><span class="muted" id="ep-count"></span></div>
+        <div class="endpoints" id="endpoint-list"></div>
+      </div>
+      <form class="card stack" id="api-form">
+        <h2>Request</h2>
+        <div class="row">
+          <select name="method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+          <input type="text" name="path" class="grow mono" value="/api/home" required>
+          <button class="btn primary">Send</button>
+        </div>
+        <label class="field">JSON body<textarea name="body" rows="6" placeholder="(none)"></textarea></label>
+        <div class="row"><strong>Response</strong><span id="api-status" class="chip">–</span><span id="api-time" class="muted"></span></div>
+        <pre class="out" id="api-response">Pick an endpoint on the left, or type a path, then Send.</pre>
+      </form>
+    </div>
+  </section>
+</main>
+
+<dialog id="report-dialog">
+  <div class="dlg-head"><h2 id="report-title">Execution report</h2><button class="btn ghost" data-act="close-dialog">✕</button></div>
+  <div class="dlg-body" id="report-body"></div>
+</dialog>
+<div id="toasts"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ------------------------------------------------------------------ helpers
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const pretty = (s) => String(s ?? "").toLowerCase().replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const ICONS = { LIGHT: "💡", THERMOSTAT: "🌡️", CAMERA: "📷", FAN: "🌀", TV: "📺", DOOR_LOCK: "🔒" };
+
+  const state = { meta: null, home: null, scenarios: [], templates: [], notifications: [], endpoints: [], view: "dashboard" };
+
+  // Where the API lives. Normally the same server that serves this page; but when the page is opened
+  // as a file or from another server (e.g. IntelliJ's preview on :63342) fall back to localhost:8080.
+  // Override with ?api=http://host:port
+  const FALLBACK_API = "http://localhost:8080";
+  let apiBase = "";
+  async function detectApiBase() {
+    const param = new URLSearchParams(location.search).get("api");
+    const candidates = param ? [param.replace(/\/+$/, "")] : [];
+    if (location.protocol.startsWith("http")) candidates.push("");
+    candidates.push(FALLBACK_API);
+    for (const base of [...new Set(candidates)]) {
+      try {
+        const res = await fetch(base + "/api/health", { cache: "no-store" });
+        const body = await res.json();
+        if (res.ok && body && body.status) { apiBase = base; return true; }
+      } catch (_) { /* try the next one */ }
+    }
+    return false;
+  }
+
+  async function api(method, path, body) {
+    const opts = { method, headers: {} };
+    if (body !== undefined) {
+      opts.headers["Content-Type"] = "application/json";
+      opts.body = typeof body === "string" ? body : JSON.stringify(body);
+    }
+    const started = performance.now();
+    const res = await fetch(apiBase + path, opts);
+    const text = await res.text();
+    let data = text;
+    try { data = text ? JSON.parse(text) : null; } catch (_) { /* not JSON */ }
+    const result = { status: res.status, ok: res.ok, data, ms: Math.round(performance.now() - started) };
+    if (!res.ok) {
+      const err = new Error((data && data.message) || ("HTTP " + res.status));
+      err.result = result;
+      throw err;
+    }
+    return result;
+  }
+
+  function toast(message, kind = "ok") {
+    const el = document.createElement("div");
+    el.className = "toast" + (kind === "error" ? " error" : "");
+    el.textContent = message;
+    $("#toasts").appendChild(el);
+    setTimeout(() => el.remove(), kind === "error" ? 6000 : 2500);
+  }
+
+  /** Runs an API call, shows an error toast on failure, then refreshes everything. */
+  async function act(call, success) {
+    try {
+      const result = await call();
+      if (success) toast(typeof success === "function" ? success(result) : success);
+      await refresh();
+      return result;
+    } catch (e) {
+      toast(e.message, "error");
+      await refresh();
+      return null;
+    }
+  }
+
+  const unit = () => state.home?.configuration?.temperatureUnit || "CELSIUS";
+  const unitSymbol = () => (unit() === "FAHRENHEIT" ? "°F" : "°C");
+  const devices = () => (state.home?.rooms || []).flatMap((r) => r.devices);
+  const actionTypes = () => state.meta?.actionTypes || [];
+  const actionsFor = (deviceType) => actionTypes().filter((a) => a.supportedDeviceType === "ANY" || a.supportedDeviceType === deviceType);
+  const options = (values, selected, label = pretty) =>
+    values.map((v) => `<option value="${esc(v)}"${v === selected ? " selected" : ""}>${esc(label(v))}</option>`).join("");
+
+  // ------------------------------------------------------------------ data loading
+  async function loadStatic() {
+    const [meta, index] = await Promise.all([api("GET", "/api/meta"), api("GET", "/api")]);
+    state.meta = meta.data;
+    state.endpoints = index.data.endpoints;
+    $("#room-type-select").innerHTML = options(state.meta.roomTypes);
+    $$(".ecosystem-select").forEach((s) => (s.innerHTML = options(state.meta.ecosystems)));
+    $("#device-filter").innerHTML = `<option value="">All devices</option>` + options(state.meta.deviceTypes);
+    renderEndpoints();
+  }
+
+  async function refresh(auto = false) {
+    // Do not redraw under the user's cursor while they type in a form field.
+    if (auto && document.activeElement?.matches("main input, main select, main textarea")) return;
+    try {
+      const filter = $("#device-filter").value, status = $("#status-filter").value;
+      const query = new URLSearchParams();
+      if (filter) query.set("type", filter);
+      if (status) query.set("status", status);
+      const [home, scenarios, templates, notifications, filtered] = await Promise.all([
+        api("GET", "/api/home"), api("GET", "/api/scenarios"), api("GET", "/api/templates"),
+        api("GET", "/api/notifications"),
+        filter || status ? api("GET", "/api/devices?" + query) : Promise.resolve(null),
+      ]);
+      state.home = home.data;
+      state.scenarios = scenarios.data;
+      state.templates = templates.data;
+      state.notifications = notifications.data;
+      state.visibleDeviceIds = filtered ? new Set(filtered.data.map((d) => d.id)) : null;
+      setOnline(true);
+      render();
+    } catch (e) {
+      setOnline(false);
+    }
+  }
+
+  function setOnline(online) {
+    $("#offline").style.display = online ? "none" : "block";
+    $("#conn").innerHTML = `<span class="dot ${online ? "ok" : "bad"}"></span> ${online ? "Live" : "Offline"}`;
+  }
+
+  // ------------------------------------------------------------------ render
+  function render() {
+    renderHeader();
+    renderStats();
+    renderRooms();
+    renderScenarios();
+    renderTemplates();
+    renderNotifications();
+    renderSettings();
+  }
+
+  function renderHeader() {
+    const h = state.home;
+    $("#home-name").textContent = h.name;
+    $("#home-sub").textContent = `${pretty(h.ecosystem)} ecosystem · ${h.roomCount} rooms · ${h.deviceCount} devices`;
+    const sec = $("#security-btn");
+    sec.innerHTML = h.securityArmed ? "🛡️ Armed" : "🔓 Disarmed";
+    sec.className = "btn " + (h.securityArmed ? "primary" : "");
+    sec.title = h.securityArmed ? "Click to disarm (POST /api/home/security/disarm)" : "Click to arm (POST /api/home/security/arm)";
+    $$("#unit-seg button").forEach((b) => b.classList.toggle("active", b.dataset.unit === unit()));
+    $("#count-scenarios").textContent = state.scenarios.length;
+    $("#count-templates").textContent = state.templates.length;
+    $("#count-notifications").textContent = state.notifications.length;
+  }
+
+  function renderStats() {
+    const h = state.home, c = h.configuration;
+    const last = state.scenarios.find((s) => s.id === h.activeScenarioId);
+    const stats = [
+      ["Rooms", h.roomCount],
+      ["Devices", h.deviceCount],
+      ["Devices on", `${h.devicesOn} / ${h.deviceCount}`],
+      ["Scenarios", h.scenarioCount],
+      ["Last scenario", last ? last.name : "–"],
+      ["Security", h.securityArmed ? "Armed" : "Disarmed"],
+      ["Auto mode", c.autoModeEnabled ? "On" : "Off"],
+    ];
+    $("#stats").innerHTML = stats.map(([l, v]) => `<div class="stat"><div class="label">${l}</div><div class="value" title="${esc(v)}">${esc(v)}</div></div>`).join("");
+  }
+
+  function renderRooms() {
+    const rooms = state.home.rooms;
+    if (!rooms.length) {
+      $("#rooms").innerHTML = `<div class="empty">No rooms yet. Add one above.</div>`;
+      return;
+    }
+    $("#rooms").innerHTML = rooms.map((room) => {
+      const shown = room.devices.filter((d) => !state.visibleDeviceIds || state.visibleDeviceIds.has(d.id));
+      return `
+      <div class="card">
+        <div class="room-head">
+          <h3>${esc(room.name)}</h3>
+          <span class="chip">${esc(pretty(room.type))}</span>
+          <span class="chip mono">${esc(room.id)}</span>
+          <button class="btn small" data-act="rename-room" data-id="${esc(room.id)}" data-name="${esc(room.name)}">Rename</button>
+          <button class="btn small danger" data-act="delete-room" data-id="${esc(room.id)}" data-name="${esc(room.name)}">Delete</button>
+        </div>
+        <div class="devices">${shown.length ? shown.map(deviceCard).join("") : `<div class="empty">${room.devices.length ? "No device matches the filter" : "No devices"}</div>`}</div>
+        <form class="row add-device-form" data-room="${esc(room.id)}" style="margin-top:12px">
+          <select name="type">${options(state.meta.deviceTypes)}</select>
+          <input type="text" name="name" placeholder="New device name" required class="grow">
+          <button class="btn">Add device</button>
+        </form>
+      </div>`;
+    }).join("");
+  }
+
+  function deviceCard(d) {
+    const on = d.status === "ON";
+    let controls = "";
+    switch (d.type) {
+      case "LIGHT":
+        controls = ctl("Brightness", `<input type="range" min="0" max="100" step="5" value="${d.brightness}" data-cmd="SET_BRIGHTNESS" data-id="${d.id}">`, `<b>${d.brightness}%</b>`);
+        break;
+      case "THERMOSTAT":
+        controls = ctl("Target", `<input type="number" step="0.5" value="${d.targetTemperature}" data-cmd="SET_TEMPERATURE" data-id="${d.id}" style="width:100%">`, `<b>${unitSymbol()}</b>`);
+        break;
+      case "CAMERA":
+        controls = ctl("Recording", `<span>${d.recording ? "● Recording" : "Not recording"}</span>`,
+          `<button class="btn small" data-act="cmd" data-cmd="${d.recording ? "STOP_RECORDING" : "START_RECORDING"}" data-id="${d.id}">${d.recording ? "Stop" : "Record"}</button>`);
+        break;
+      case "FAN":
+        controls = ctl("Speed", `<input type="range" min="1" max="5" step="1" value="${d.speed}" data-cmd="SET_SPEED" data-id="${d.id}">`, `<b>${d.speed}</b>`);
+        break;
+      case "TV":
+        controls = ctl("Channel", `<input type="number" min="1" value="${d.channel}" data-cmd="SET_CHANNEL" data-id="${d.id}" style="width:100%">`, "")
+          + ctl("Volume", `<input type="range" min="0" max="100" step="5" value="${d.volume}" data-cmd="SET_VOLUME" data-id="${d.id}">`, `<b>${d.volume}</b>`);
+        break;
+      case "DOOR_LOCK":
+        controls = ctl("Lock", `<span>${d.locked ? "🔒 Locked" : "🔓 Unlocked"}</span>`,
+          `<button class="btn small" data-act="cmd" data-cmd="${d.locked ? "UNLOCK" : "LOCK"}" data-id="${d.id}">${d.locked ? "Unlock" : "Lock"}</button>`);
+        break;
+    }
+    const roomOptions = state.home.rooms.map((r) => `<option value="${esc(r.id)}"${r.id === d.roomId ? " selected" : ""}>${esc(r.name)}</option>`).join("");
+    return `
+      <div class="device ${on ? "on" : ""}">
+        <div class="device-top">
+          <div class="device-icon">${ICONS[d.type] || "•"}</div>
+          <div class="device-name">${esc(d.name)}<small>${esc(d.model)} · <span class="mono">${esc(d.id)}</span></small></div>
+          <span class="chip ${on ? "ok" : ""}">${on ? "On" : "Off"}</span>
+          <button class="switch ${on ? "on" : ""}" title="${on ? "Turn off" : "Turn on"}" data-act="power" data-id="${d.id}" data-on="${on}"></button>
+        </div>
+        <div class="device-controls">${controls}</div>
+        <div class="device-foot">
+          <span class="muted" style="font-size:12px">Move to</span>
+          <select data-act-change="move" data-id="${d.id}">${roomOptions}</select>
+          <button class="btn small" data-act="rename-device" data-id="${d.id}" data-name="${esc(d.name)}">Rename</button>
+          <button class="btn small danger" data-act="delete-device" data-id="${d.id}" data-name="${esc(d.name)}">Delete</button>
+        </div>
+      </div>`;
+  }
+  const ctl = (label, input, extra) => `<div class="ctl"><span>${label}</span>${input}<span>${extra}</span></div>`;
+
+  // ------------------------------------------------------------------ scenarios
+  function triggerText(t) {
+    if (!t || t.type === "MANUAL") return "Manual";
+    return t.type === "TIME" ? `Every day at ${t.value}` : `On event “${t.value}”`;
+  }
+
+  function actionText(a) {
+    let target;
+    if (a.deviceId) {
+      const d = devices().find((x) => x.id === a.deviceId);
+      target = d ? d.name : a.deviceId + " (missing)";
+    } else {
+      const room = a.roomId ? state.home.rooms.find((r) => r.id === a.roomId) : null;
+      target = `All ${pretty(a.deviceType).toLowerCase()}s` + (a.roomId ? ` in ${room ? room.name : a.roomId}` : "");
+    }
+    let value = "";
+    if (a.value !== null && a.value !== undefined) {
+      value = a.type === "SET_TEMPERATURE" ? ` ${a.value}${unitSymbol()}` : a.type === "SET_BRIGHTNESS" ? ` ${a.value}%` : ` ${a.value}`;
+    }
+    return `${esc(target)} → ${esc(pretty(a.type))}${esc(value)}`;
+  }
+
+  function renderScenarios() {
+    const list = $("#scenario-list");
+    if (!state.scenarios.length) {
+      list.innerHTML = `<div class="empty">No scenarios yet. Create one, or add one from Templates.</div>`;
+      return;
+    }
+    list.innerHTML = state.scenarios.map((s) => `
+      <div class="scenario ${s.enabled ? "" : "disabled"}">
+        <div class="scenario-head">
+          <h3>${esc(s.name)}</h3>
+          <span class="chip mono">${esc(s.id)}</span>
+          ${s.id === state.home.activeScenarioId ? `<span class="chip accent">last run</span>` : ""}
+          <span class="chip ${s.enabled ? "ok" : "warn"}">${s.enabled ? "Enabled" : "Disabled"}</span>
+        </div>
+        ${s.description ? `<div class="muted" style="margin-top:4px">${esc(s.description)}</div>` : ""}
+        <div class="row" style="margin-top:8px">
+          <span class="chip">⏱ ${esc(triggerText(s.trigger))}</span>
+          ${s.securityMode !== "NONE" ? `<span class="chip ${s.securityMode === "ARM" ? "accent" : "warn"}">🛡️ ${s.securityMode === "ARM" ? "Arms security" : "Disarms security"}</span>` : ""}
+          <span class="chip">🔔 ${s.notifyOnExecution ? (s.notificationMessage ? "Custom message" : "Summary") : "Silent"}</span>
+        </div>
+        <ol class="action-list">${s.actions.map((a) => `<li>${actionText(a)}</li>`).join("")}</ol>
+        <div class="row" style="margin-top:10px">
+          <button class="btn small primary" data-act="run" data-id="${s.id}" ${s.enabled ? "" : "disabled title='Enable it first'"}>▶ Run</button>
+          <button class="btn small" data-act="edit-scenario" data-id="${s.id}">Edit</button>
+          <button class="btn small" data-act="clone" data-id="${s.id}" data-name="${esc(s.name)}">Clone</button>
+          <button class="btn small" data-act="${s.enabled ? "disable" : "enable"}" data-id="${s.id}">${s.enabled ? "Disable" : "Enable"}</button>
+          <button class="btn small" data-act="save-template" data-id="${s.id}" data-name="${esc(s.name)}">Save as template</button>
+          <button class="btn small danger" data-act="delete-scenario" data-id="${s.id}" data-name="${esc(s.name)}">Delete</button>
+        </div>
+      </div>`).join("");
+  }
+
+  // Scenario form ---------------------------------------------------
+  function targetOptions(selected) {
+    const devs = devices().map((d) => `<option value="dev:${esc(d.id)}"${selected === "dev:" + d.id ? " selected" : ""}>${esc(d.name)} (${esc(d.id)})</option>`).join("");
+    const types = state.meta.deviceTypes.map((t) => `<option value="type:${t}"${selected === "type:" + t ? " selected" : ""}>All ${esc(pretty(t).toLowerCase())}s</option>`).join("");
+    return `<optgroup label="Every device of a type">${types}</optgroup><optgroup label="One device">${devs}</optgroup>`;
+  }
+
+  function addActionRow(action) {
+    const row = document.createElement("div");
+    row.className = "action-row";
+    const target = action ? (action.deviceId ? "dev:" + action.deviceId : "type:" + action.deviceType) : "type:LIGHT";
+    row.innerHTML = `
+      <select data-part="target">${targetOptions(target)}</select>
+      <select data-part="room"><option value="">Any room</option>${state.home.rooms.map((r) => `<option value="${esc(r.id)}"${action?.roomId === r.id ? " selected" : ""}>${esc(r.name)}</option>`).join("")}</select>
+      <select data-part="type"></select>
+      <input type="number" step="any" data-part="value" placeholder="value" value="${action?.value ?? ""}">
+      <button type="button" class="btn small ghost" data-act="remove-action-row" title="Remove">✕</button>`;
+    $("#action-rows").appendChild(row);
+    syncActionRow(row, action?.type);
+  }
+
+  function syncActionRow(row, preferredType) {
+    const target = $("[data-part=target]", row).value;
+    let deviceType;
+    if (target.startsWith("dev:")) {
+      deviceType = devices().find((d) => d.id === target.slice(4))?.type;
+    } else {
+      deviceType = target.slice(5);
+    }
+    $("[data-part=room]", row).style.visibility = target.startsWith("type:") ? "visible" : "hidden";
+    const typeSelect = $("[data-part=type]", row);
+    const current = preferredType || typeSelect.value;
+    const available = actionsFor(deviceType).map((a) => a.type);
+    typeSelect.innerHTML = options(available, available.includes(current) ? current : available[0]);
+    const needsValue = actionTypes().find((a) => a.type === typeSelect.value)?.requiresValue;
+    const valueInput = $("[data-part=value]", row);
+    valueInput.style.visibility = needsValue ? "visible" : "hidden";
+    valueInput.placeholder = typeSelect.value === "SET_TEMPERATURE" ? unitSymbol() : "value";
+  }
+
+  function syncScenarioForm() {
+    const f = $("#scenario-form");
+    const t = f.triggerType.value;
+    $("#trigger-value-field").style.display = t === "MANUAL" ? "none" : "";
+    f.triggerValue.type = t === "TIME" ? "time" : "text";
+    f.triggerValue.placeholder = t === "EVENT" ? "e.g. arrived-home" : "";
+    $("#notify-msg-field").style.display = f.notify.value === "custom" ? "" : "none";
+  }
+
+  function resetScenarioForm(scenario) {
+    const f = $("#scenario-form");
+    f.reset();
+    f.scenarioId.value = scenario?.id || "";
+    $("#scenario-form-title").textContent = scenario ? `Edit “${scenario.name}”` : "New scenario";
+    $("#scenario-submit").textContent = scenario ? "Save changes (PUT)" : "Create scenario (POST)";
+    $("#action-rows").innerHTML = "";
+    if (scenario) {
+      f.name.value = scenario.name;
+      f.description.value = scenario.description || "";
+      f.triggerType.value = scenario.trigger.type;
+      f.triggerValue.value = scenario.trigger.value || "";
+      f.securityMode.value = scenario.securityMode;
+      f.enabled.value = String(scenario.enabled);
+      f.notify.value = !scenario.notifyOnExecution ? "off" : scenario.notificationMessage ? "custom" : "summary";
+      f.notificationMessage.value = scenario.notificationMessage || "";
+      scenario.actions.forEach(addActionRow);
+    } else {
+      addActionRow();
+    }
+    syncScenarioForm();
+  }
+
+  function readScenarioForm() {
+    const f = $("#scenario-form");
+    const actions = $$(".action-row", f).map((row) => {
+      const target = $("[data-part=target]", row).value;
+      const type = $("[data-part=type]", row).value;
+      const needsValue = actionTypes().find((a) => a.type === type)?.requiresValue;
+      const action = { type };
+      if (target.startsWith("dev:")) action.deviceId = target.slice(4);
+      else {
+        action.deviceType = target.slice(5);
+        const room = $("[data-part=room]", row).value;
+        if (room) action.roomId = room;
+      }
+      const raw = $("[data-part=value]", row).value;
+      if (needsValue && raw !== "") action.value = Number(raw);
+      return action;
+    });
+    const body = {
+      name: f.name.value.trim(),
+      description: f.description.value.trim(),
+      trigger: { type: f.triggerType.value, value: f.triggerType.value === "MANUAL" ? null : f.triggerValue.value.trim() },
+      securityMode: f.securityMode.value,
+      enabled: f.enabled.value === "true",
+      notifyOnExecution: f.notify.value !== "off",
+      actions,
+    };
+    if (f.notify.value === "custom") body.notificationMessage = f.notificationMessage.value.trim();
+    else if (f.scenarioId.value) body.notificationMessage = ""; // clears a previous custom message
+    return body;
+  }
+
+  function showReport(report) {
+    $("#report-title").textContent = `“${report.scenarioName}” executed`;
+    $("#report-body").innerHTML = `
+      <div class="row" style="margin-bottom:12px">
+        <span class="chip ok">${report.applied} applied</span>
+        <span class="chip warn">${report.skipped} skipped</span>
+        <span class="chip danger">${report.failed} failed</span>
+      </div>
+      <table class="report"><thead><tr><th>Outcome</th><th>Action</th><th>Device</th><th>Note</th></tr></thead><tbody>
+      ${report.entries.map((e) => `<tr><td><span class="chip ${e.outcome === "APPLIED" ? "ok" : e.outcome === "FAILED" ? "danger" : "warn"}">${esc(e.outcome)}</span></td>
+        <td class="mono">${esc(e.action)}</td><td>${esc(e.deviceName || "–")}</td><td class="muted">${esc(e.message || "")}</td></tr>`).join("")}
+      </tbody></table>`;
+    $("#report-dialog").showModal();
+  }
+
+  // ------------------------------------------------------------------ templates / notifications / settings
+  function renderTemplates() {
+    $("#template-list").innerHTML = state.templates.map((t) => `
+      <div class="card">
+        <div class="scenario-head"><h3>${esc(t.name)}</h3><span class="chip mono">${esc(t.key)}</span></div>
+        ${t.description ? `<div class="muted" style="margin-top:4px">${esc(t.description)}</div>` : ""}
+        <div class="row" style="margin-top:8px">
+          <span class="chip">⏱ ${esc(triggerText(t.trigger))}</span>
+          ${t.securityMode !== "NONE" ? `<span class="chip accent">🛡️ ${pretty(t.securityMode)}</span>` : ""}
+        </div>
+        <ol class="action-list">${t.actions.map((a) => `<li>${actionText(a)}</li>`).join("")}</ol>
+        <form class="row template-form" data-key="${esc(t.key)}" style="margin-top:10px">
+          <input type="text" name="name" placeholder="Name (optional)" class="grow">
+          <button class="btn primary small">Add to home</button>
+        </form>
+      </div>`).join("") || `<div class="empty">No templates</div>`;
+  }
+
+  function renderNotifications() {
+    const enabled = state.home.configuration.notificationsEnabled;
+    $("#notif-state").className = "chip " + (enabled ? "ok" : "warn");
+    $("#notif-state").textContent = enabled ? "Recording" : "Disabled in settings";
+    $("#notification-list").innerHTML = state.notifications.length
+      ? state.notifications.map((n) => `
+          <div class="row" style="padding:8px 0;border-bottom:1px solid var(--border)">
+            <span class="chip ${n.type === "SECURITY" ? "accent" : ""}">${n.type === "SECURITY" ? "🛡️" : "▶"} ${esc(pretty(n.type))}</span>
+            <span class="grow">${esc(n.message)}</span>
+            <span class="muted mono">${esc(new Date(n.time).toLocaleString())}</span>
+          </div>`).join("")
+      : `<div class="empty">No notifications yet. Run a scenario or arm security.</div>`;
+  }
+
+  function renderSettings() {
+    const c = state.home.configuration;
+    const f = $("#config-form");
+    if (!f.contains(document.activeElement)) {
+      f.temperatureUnit.value = c.temperatureUnit;
+      f.defaultTemperature.value = c.defaultTemperature;
+      $$(".switch[data-flag]", f).forEach((s) => s.classList.toggle("on", !!c[s.dataset.flag]));
+    }
+    $$(".unit-symbol").forEach((el) => (el.textContent = unitSymbol()));
+    const hf = $("#home-form");
+    if (!hf.contains(document.activeElement)) {
+      hf.name.value = state.home.name;
+      hf.ecosystem.value = state.home.ecosystem;
+    }
+    const events = [...new Set([...state.scenarios, ...state.templates].filter((s) => s.trigger.type === "EVENT").map((s) => s.trigger.value))];
+    $("#event-names").innerHTML = events.map((e) => `<option value="${esc(e)}">`).join("");
+  }
+
+  async function loadHomeState() {
+    try {
+      const [st, health] = await Promise.all([api("GET", "/api/home/state"), api("GET", "/api/health")]);
+      $("#home-state").textContent = st.data.state;
+      $("#health").className = "chip ok";
+      $("#health").textContent = health.data.status;
+    } catch (e) {
+      $("#health").className = "chip danger";
+      $("#health").textContent = "DOWN";
+    }
+  }
+
+  // ------------------------------------------------------------------ API explorer
+  const SAMPLES = {
+    "POST /api/home": { name: "My New Home", ecosystem: "APPLE" },
+    "PUT /api/home": { name: "Renamed Home", ecosystem: "GOOGLE" },
+    "PUT /api/home/configuration": { temperatureUnit: "CELSIUS", defaultTemperature: 21, notificationsEnabled: true, autoModeEnabled: false },
+    "POST /api/rooms": { name: "Office", type: "OFFICE" },
+    "PUT /api/rooms/{id}": { name: "Renamed room" },
+    "POST /api/rooms/{id}/devices": { type: "LIGHT", name: "Desk Lamp" },
+    "POST /api/devices": { roomId: "{room}", type: "FAN", name: "Desk Fan" },
+    "PUT /api/devices/{id}": { name: "Renamed device" },
+    "POST /api/devices/{id}/commands": { type: "TURN_ON" },
+    "POST /api/scenarios": { name: "Evening", trigger: { type: "TIME", value: "19:00" }, securityMode: "NONE",
+      actions: [{ type: "SET_BRIGHTNESS", deviceType: "LIGHT", value: 60 }, { type: "TURN_ON", deviceType: "TV" }] },
+    "PUT /api/scenarios/{id}": { description: "Updated from the API explorer" },
+    "POST /api/scenarios/{id}/clone": { name: "Copy" },
+    "POST /api/scenarios/{id}/save-as-template": { key: "my-template" },
+    "POST /api/templates/{key}/create": { name: "From template" },
+    "POST /api/events": { name: "arrived-home" },
+  };
+  const DESCRIPTIONS = {
+    "GET /api": "List every endpoint", "GET /api/health": "Health check", "GET /api/meta": "All accepted enum values",
+    "GET /api/home": "Home summary with rooms and devices", "POST /api/home": "Replace the home with a new empty one",
+    "PUT /api/home": "Rename / change ecosystem", "GET /api/home/state": "Text snapshot",
+    "GET /api/home/configuration": "Read configuration", "PUT /api/home/configuration": "Update configuration",
+    "POST /api/home/security/arm": "Arm security", "POST /api/home/security/disarm": "Disarm security",
+    "GET /api/notifications": "List notifications", "DELETE /api/notifications": "Clear notifications",
+    "GET /api/rooms": "List rooms", "POST /api/rooms": "Create a room", "GET /api/rooms/{id}": "Get a room",
+    "PUT /api/rooms/{id}": "Update a room", "DELETE /api/rooms/{id}": "Delete a room and its devices",
+    "GET /api/rooms/{id}/devices": "Devices of a room", "POST /api/rooms/{id}/devices": "Add a device to a room",
+    "GET /api/devices": "List devices (?type=&roomId=&status=)", "POST /api/devices": "Create a device",
+    "GET /api/devices/{id}": "Get a device", "PUT /api/devices/{id}": "Rename / move a device",
+    "DELETE /api/devices/{id}": "Delete a device", "POST /api/devices/{id}/on": "Turn on",
+    "POST /api/devices/{id}/off": "Turn off", "POST /api/devices/{id}/commands": "Run a device command",
+    "GET /api/scenarios": "List scenarios", "POST /api/scenarios": "Create a scenario", "GET /api/scenarios/{id}": "Get a scenario",
+    "PUT /api/scenarios/{id}": "Update a scenario", "DELETE /api/scenarios/{id}": "Delete a scenario",
+    "POST /api/scenarios/{id}/execute": "Run a scenario", "POST /api/scenarios/{id}/clone": "Clone (Prototype)",
+    "POST /api/scenarios/{id}/enable": "Enable", "POST /api/scenarios/{id}/disable": "Disable",
+    "POST /api/scenarios/{id}/save-as-template": "Save as template", "GET /api/templates": "List templates",
+    "POST /api/templates/{key}/create": "Create a scenario from a template", "POST /api/events": "Fire an event",
+  };
+
+  function renderEndpoints() {
+    const groups = {};
+    state.endpoints.forEach((ep) => {
+      const [method, path] = ep.split(" ");
+      const group = path.split("/")[2] || "index";
+      (groups[group] ||= []).push({ method, path, key: ep });
+    });
+    $("#ep-count").textContent = state.endpoints.length + " endpoints";
+    $("#endpoint-list").innerHTML = Object.entries(groups).map(([group, eps]) => `
+      <div class="ep-group"><h3>${esc(group)}</h3>
+        ${eps.map((e) => `<button class="ep" data-act="pick-endpoint" data-key="${esc(e.key)}">
+          <span class="method m-${e.method}">${e.method}</span>
+          <span style="min-width:0"><span class="mono">${esc(e.path)}</span><br><span class="muted" style="font-size:12px">${esc(DESCRIPTIONS[e.key] || "")}</span></span>
+        </button>`).join("")}
+      </div>`).join("");
+  }
+
+  /** Replaces {id}/{key} with a real id so the request works straight away. */
+  function fillPath(path) {
+    const firstRoom = state.home?.rooms[0]?.id || "room-1";
+    const firstDevice = devices()[0]?.id || "dev-1";
+    const firstScenario = state.scenarios[0]?.id || "scn-1";
+    const firstTemplate = state.templates[0]?.key || "good-night";
+    return path
+      .replace(/^\/api\/rooms\/\{id\}/, "/api/rooms/" + firstRoom)
+      .replace(/^\/api\/devices\/\{id\}/, "/api/devices/" + firstDevice)
+      .replace(/^\/api\/scenarios\/\{id\}/, "/api/scenarios/" + firstScenario)
+      .replace("{key}", firstTemplate);
+  }
+
+  function pickEndpoint(key) {
+    const [method, path] = key.split(" ");
+    const f = $("#api-form");
+    f.method.value = method;
+    f.path.value = fillPath(path);
+    const sample = SAMPLES[key];
+    f.body.value = sample ? JSON.stringify(sample, null, 2).replace('"{room}"', JSON.stringify(state.home?.rooms[0]?.id || "room-1")) : "";
+    f.path.focus();
+  }
+
+  async function sendApiForm() {
+    const f = $("#api-form");
+    const body = f.body.value.trim();
+    let result;
+    try {
+      if (body) JSON.parse(body);
+      result = await api(f.method.value, f.path.value.trim(), body || undefined);
+    } catch (e) {
+      if (e instanceof SyntaxError) { toast("Body is not valid JSON: " + e.message, "error"); return; }
+      result = e.result || { status: 0, ok: false, data: e.message, ms: 0 };
+    }
+    $("#api-status").className = "chip " + (result.ok ? "ok" : "danger");
+    $("#api-status").textContent = result.status ? String(result.status) : "network error";
+    $("#api-time").textContent = result.ms + " ms";
+    $("#api-response").textContent = result.status === 204 ? "(204 No Content)"
+      : typeof result.data === "string" ? result.data : JSON.stringify(result.data, null, 2);
+    if (f.method.value !== "GET") refresh();
+  }
+
+  // ------------------------------------------------------------------ events
+  const enc = encodeURIComponent;
+
+  document.addEventListener("click", async (ev) => {
+    const tab = ev.target.closest("#tabs button");
+    if (tab) return showView(tab.dataset.view);
+    const el = ev.target.closest("[data-act]");
+    if (!el || el.tagName === "SELECT") return;
+    const { act: action, id, name } = el.dataset;
+    switch (action) {
+      case "theme": {
+        const root = document.documentElement;
+        const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        root.dataset.theme = dark ? "light" : "dark";
+        try { localStorage.setItem("theme", root.dataset.theme); } catch (_) { }
+        break;
+      }
+      case "toggle-security":
+        await act(() => api("POST", "/api/home/security/" + (state.home.securityArmed ? "disarm" : "arm")),
+          state.home.securityArmed ? "Security disarmed" : "Security armed: doors locked, cameras recording");
+        break;
+      case "unit":
+        await act(() => api("PUT", "/api/home/configuration", { temperatureUnit: el.dataset.unit }), "Temperatures now in " + pretty(el.dataset.unit));
+        break;
+      case "power":
+        await act(() => api("POST", `/api/devices/${enc(id)}/${el.dataset.on === "true" ? "off" : "on"}`));
+        break;
+      case "cmd":
+        await act(() => api("POST", `/api/devices/${enc(id)}/commands`, { type: el.dataset.cmd }));
+        break;
+      case "rename-room": {
+        const n = prompt("New room name", name);
+        if (n) await act(() => api("PUT", `/api/rooms/${enc(id)}`, { name: n }), "Room renamed");
+        break;
+      }
+      case "delete-room":
+        if (confirm(`Delete room “${name}” and all its devices?`)) await act(() => api("DELETE", `/api/rooms/${enc(id)}`), "Room deleted");
+        break;
+      case "rename-device": {
+        const n = prompt("New device name", name);
+        if (n) await act(() => api("PUT", `/api/devices/${enc(id)}`, { name: n }), "Device renamed");
+        break;
+      }
+      case "delete-device":
+        if (confirm(`Delete device “${name}”?`)) await act(() => api("DELETE", `/api/devices/${enc(id)}`), "Device deleted");
+        break;
+      case "run": {
+        const r = await act(() => api("POST", `/api/scenarios/${enc(id)}/execute`));
+        if (r) showReport(r.data);
+        break;
+      }
+      case "edit-scenario":
+        resetScenarioForm(state.scenarios.find((s) => s.id === id));
+        $("#scenario-form").scrollIntoView({ behavior: "smooth", block: "start" });
+        break;
+      case "new-scenario":
+        resetScenarioForm();
+        break;
+      case "clone": {
+        const n = prompt("Name of the copy", name + " (copy)");
+        if (n !== null) await act(() => api("POST", `/api/scenarios/${enc(id)}/clone`, { name: n }), "Scenario cloned");
+        break;
+      }
+      case "enable":
+      case "disable":
+        await act(() => api("POST", `/api/scenarios/${enc(id)}/${action}`), action === "enable" ? "Scenario enabled" : "Scenario disabled");
+        break;
+      case "save-template": {
+        const key = prompt("Template key", name.toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+        if (key) await act(() => api("POST", `/api/scenarios/${enc(id)}/save-as-template`, { key }), "Saved as template “" + key + "”");
+        break;
+      }
+      case "delete-scenario":
+        if (confirm(`Delete scenario “${name}”?`)) await act(() => api("DELETE", `/api/scenarios/${enc(id)}`), "Scenario deleted");
+        break;
+      case "add-action-row":
+        addActionRow();
+        break;
+      case "remove-action-row":
+        el.closest(".action-row").remove();
+        break;
+      case "clear-notifications":
+        await act(() => api("DELETE", "/api/notifications"), "Notifications cleared");
+        break;
+      case "load-state":
+        loadHomeState();
+        break;
+      case "pick-endpoint":
+        pickEndpoint(el.dataset.key);
+        break;
+      case "close-dialog":
+        el.closest("dialog").close();
+        break;
+    }
+  });
+
+  // Sliders and number inputs send a device command when the value is committed.
+  document.addEventListener("change", async (ev) => {
+    const el = ev.target;
+    if (el.dataset.cmd && el.dataset.id) {
+      await act(() => api("POST", `/api/devices/${enc(el.dataset.id)}/commands`, { type: el.dataset.cmd, value: Number(el.value) }));
+    } else if (el.dataset.actChange === "move") {
+      await act(() => api("PUT", `/api/devices/${enc(el.dataset.id)}`, { roomId: el.value }), "Device moved");
+    } else if (el.id === "device-filter" || el.id === "status-filter") {
+      refresh();
+    } else if (el.closest(".action-row")) {
+      syncActionRow(el.closest(".action-row"));
+    } else if (el.closest("#scenario-form")) {
+      syncScenarioForm();
+    }
+  });
+
+  // Live value next to a slider while dragging.
+  document.addEventListener("input", (ev) => {
+    const el = ev.target;
+    if (el.type === "range" && el.dataset.cmd) {
+      const label = el.closest(".ctl")?.querySelector("b");
+      if (label) label.textContent = el.value + (el.dataset.cmd === "SET_BRIGHTNESS" ? "%" : "");
+    }
+  });
+
+  document.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    if (f.id === "add-room-form") {
+      const ok = await act(() => api("POST", "/api/rooms", { name: f.name.value.trim(), type: f.type.value }), "Room added");
+      if (ok) f.reset();
+    } else if (f.classList.contains("add-device-form")) {
+      await act(() => api("POST", `/api/rooms/${enc(f.dataset.room)}/devices`, { type: f.type.value, name: f.name.value.trim() }), "Device added");
+    } else if (f.id === "scenario-form") {
+      const body = readScenarioForm();
+      const id = f.scenarioId.value;
+      const r = await act(() => id ? api("PUT", `/api/scenarios/${enc(id)}`, body) : api("POST", "/api/scenarios", body),
+        id ? "Scenario updated" : "Scenario created");
+      if (r) resetScenarioForm();
+    } else if (f.classList.contains("template-form")) {
+      const n = f.name.value.trim();
+      const r = await act(() => api("POST", `/api/templates/${enc(f.dataset.key)}/create`, n ? { name: n } : {}),
+        (res) => `“${res.data.name}” added to your scenarios`);
+      if (r) f.reset();
+    } else if (f.id === "config-form") {
+      const flags = Object.fromEntries($$(".switch[data-flag]", f).map((s) => [s.dataset.flag, s.classList.contains("on")]));
+      await act(() => api("PUT", "/api/home/configuration", {
+        temperatureUnit: f.temperatureUnit.value, defaultTemperature: Number(f.defaultTemperature.value), ...flags,
+      }), "Configuration saved");
+      loadHomeState();
+    } else if (f.id === "event-form") {
+      const r = await act(() => api("POST", "/api/events", { name: f.name.value.trim() }));
+      if (r) {
+        const ran = r.data.executed;
+        if (!ran.length) toast(state.home.configuration.autoModeEnabled ? "No enabled scenario listens to this event" : "Nothing ran: turn on Auto mode first", "error");
+        else { toast(ran.length + " scenario(s) ran"); showReport(ran[0]); }
+      }
+    } else if (f.id === "home-form") {
+      await act(() => api("PUT", "/api/home", { name: f.name.value.trim(), ecosystem: f.ecosystem.value }), "Home saved");
+    } else if (f.id === "new-home-form") {
+      if (confirm("Replace the whole home with a new empty one?")) {
+        const r = await act(() => api("POST", "/api/home", { name: f.name.value.trim(), ecosystem: f.ecosystem.value }), "New home created");
+        if (r) { f.reset(); resetScenarioForm(); }
+      }
+    } else if (f.id === "api-form") {
+      sendApiForm();
+    }
+  });
+
+  // Toggle switches inside the configuration form only change the form until it is saved.
+  $("#config-form").addEventListener("click", (ev) => {
+    const s = ev.target.closest(".switch[data-flag]");
+    if (s) s.classList.toggle("on");
+  });
+
+  function showView(view) {
+    state.view = view;
+    $$("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+    $$(".view").forEach((v) => v.classList.toggle("active", v.id === "view-" + view));
+    if (view === "settings") loadHomeState();
+    try { localStorage.setItem("view", view); } catch (_) { }
+  }
+
+  // ------------------------------------------------------------------ start
+  async function start() {
+    try {
+      const saved = localStorage.getItem("theme");
+      if (saved) document.documentElement.dataset.theme = saved;
+    } catch (_) { }
+    try {
+      if (!(await detectApiBase())) throw new Error("API not reachable");
+      await loadStatic();
+      await refresh();
+      resetScenarioForm();
+      let view = "dashboard";
+      try { view = localStorage.getItem("view") || view; } catch (_) { }
+      showView($(`#tabs button[data-view="${view}"]`) ? view : "dashboard");
+    } catch (e) {
+      setOnline(false);
+      setTimeout(start, 3000);
+      return;
+    }
+    setInterval(() => refresh(true), 3000);
+  }
+  start();
+})();
+</script>
+</body>
+</html>

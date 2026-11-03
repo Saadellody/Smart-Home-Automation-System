@@ -16,11 +16,12 @@ import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
-/** REST API built on the JDK's HttpServer: no framework, no external dependency. */
+/** REST API (under /api) and web dashboard (at /), built on the JDK's HttpServer: no framework, no external dependency. */
 public class ApiServer {
 
     private final HttpServer server;
     private final Router router = new Router();
+    private final StaticFileHandler dashboard;
 
     public ApiServer(String host, int port, Executor executor,
                      SmartHomeService smartHomeService, RoomService roomService,
@@ -33,8 +34,15 @@ public class ApiServer {
         router.get("/api", req -> Response.ok(Map.of("name", "Smart Home Automation API", "endpoints", router.describeRoutes())));
 
         server = HttpServer.create(new InetSocketAddress(host, port), 0);
-        server.createContext("/", router);
+        server.createContext("/api", router);
+        dashboard = new StaticFileHandler(StaticFileHandler.locateWebRoot());
+        server.createContext("/", dashboard);
         server.setExecutor(executor);
+    }
+
+    /** True when the web dashboard files were found and are served at "/". */
+    public boolean isDashboardAvailable() {
+        return dashboard.isAvailable();
     }
 
     public void start() {

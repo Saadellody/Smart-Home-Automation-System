@@ -10,7 +10,7 @@ See [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md) for the design.
 
 ```bash
 javac -d out $(find src -name "*.java")
-java -cp out com.smarthome.Main            # REST API on http://localhost:8080/api, with demo data
+java -cp out com.smarthome.Main            # web dashboard on http://localhost:8080/ + REST API on /api, with demo data
 java -cp out com.smarthome.Main cli        # interactive command line (type "help")
 java -cp out com.smarthome.Main demo       # console walkthrough of the full workflow
 ```
@@ -29,6 +29,21 @@ javac -d out (Get-ChildItem -Recurse src -Filter *.java).FullName
 ```
 
 In IntelliJ, open the folder and run `com.smarthome.Main`.
+
+## Web dashboard
+
+Start the server and open **http://localhost:8080/** to use the dashboard. It's a single page (`web/index.html`) served by the same server, with plain HTML, CSS and JavaScript and no build step or dependencies. It refreshes every 3 seconds and has six tabs:
+
+- **Rooms & devices:** live stats, plus one card per room with device controls. You can switch devices on and off, and set brightness, temperature, recording, fan speed, TV channel and volume, and locks. You can also add, rename, move and delete rooms and devices, and filter by type or status.
+- **Scenarios:** run a scenario (with its execution report), create or edit one with a form-based Builder, clone it, enable or disable it, save it as a template, or delete it.
+- **Templates:** add any built-in or saved template to your home.
+- **Notifications:** the notification feed, with a button to clear it.
+- **Home & settings:** temperature unit and default temperature, security, notifications, auto mode, firing events, renaming the home and changing its ecosystem, starting a new home, and a text snapshot of the home's state.
+- **API explorer:** every endpoint with a description. Click one to fill in a ready-to-send request with real ids, then send it and see the status, timing and JSON response.
+
+The header always shows the security state (click to arm or disarm), a °C/°F switch, a light/dark theme toggle and the connection status.
+
+The server looks for `web/` in the current folder, then next to the `out/` folder, so it works from any directory. To use another folder, pass `-Dsmarthome.web=<folder>`.
 
 ## Tests
 
